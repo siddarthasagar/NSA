@@ -26,6 +26,15 @@ from extended_transformations.rotate_duplicate import rotate_duplicate_grid_base
 from extended_transformations.arbitrary_duplicate_grid import arbitrary_duplicate_grid_based
 import matplotlib.pyplot as plt
 
+# Original single-task configuration from the paper's authors
+# To use all training tasks for more diverse synthetic data generation, uncomment the following:
+# def load_training_task_ids():
+#     training_dir = "dataset/training"
+#     if os.path.exists(training_dir):
+#         return [f.replace('.json', '') for f in os.listdir(training_dir) if f.endswith('.json')]
+#     return ["3ee1011a"]
+# task_ids = load_training_task_ids()
+
 task_ids = ["3ee1011a"]
 
 def are_grids_identical(grids):
@@ -280,30 +289,35 @@ def load_images(sample_folder, samples):
 
     return grids
 
-def sample_and_apply_with_timeout(no_of_trans=1,
-                                  sample_folder="full_video_data",
-                                  samples=4,
-                                  transformation_ops=None,
-                                  chosen_task=None,
-                                  timeout=2):
-    """
-    Wrapper function to apply sample_and_apply with a timeout.
-    """
-    def worker(q):
-        try:
-            result = sample_and_apply(
-                no_of_trans=no_of_trans,
-                sample_folder=sample_folder,
-                samples=samples,
-                transformation_ops=transformation_ops,
-                chosen_task=chosen_task
-            )
-            q.put(result)
-        except Exception as e:
-            q.put(e)
+def _sample_and_apply_worker(q, no_of_trans, sample_folder, samples, transformation_ops, chosen_task):
+    """Top-level worker function for multiprocessing; required for spawn start method (macOS/Windows)."""
+    try:
+        result = sample_and_apply(
+            no_of_trans=no_of_trans,
+            sample_folder=sample_folder,
+            samples=samples,
+            transformation_ops=transformation_ops,
+            chosen_task=chosen_task,
+        )
+        q.put(result)
+    except Exception as e:
+        q.put(e)
 
+
+def sample_and_apply_with_timeout(
+    no_of_trans=1,
+    sample_folder="full_video_data",
+    samples=4,
+    transformation_ops=None,
+    chosen_task=None,
+    timeout=2,
+):
+    """Wrapper to run sample_and_apply in a separate process with a timeout."""
     q = Queue()
-    p = Process(target=worker, args=(q,))
+    p = Process(
+        target=_sample_and_apply_worker,
+        args=(q, no_of_trans, sample_folder, samples, transformation_ops, chosen_task),
+    )
     p.start()
     p.join(timeout)
     if p.is_alive():

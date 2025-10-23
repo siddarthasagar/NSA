@@ -21,9 +21,7 @@ def update_progress_bar(folder, pbar, target_count):
     pbar.last_print_n = current_count
     pbar.refresh()
 
-from tqdm import tqdm
-
-def generate_samples(number_of_samples, output_folder, all_transformations_path, no_of_trans, transformation_ops=None, chosen_task=None):
+def generate_samples(number_of_samples, output_folder, all_transformations_path, no_of_trans, transformation_ops=None, chosen_task=None, timeout: float = 2.0):
     pbar = tqdm(total=number_of_samples, desc=f"Generating {no_of_trans} transformation samples")
     
     for _ in range(number_of_samples):
@@ -34,7 +32,7 @@ def generate_samples(number_of_samples, output_folder, all_transformations_path,
                 transformation_ops=transformation_ops,
                 samples="task_based",
                 chosen_task=chosen_task,
-                timeout=0.1  # Timeout in seconds. If you cannot produce task in 0.1 sec then switch to next one.
+                timeout=timeout  # Configurable timeout. Increase if generation is timing out too frequently.
             )
             if result is None:
                 print("Sample generation timed out. Moving to the next transformation.")
@@ -61,6 +59,7 @@ def main():
     parser.add_argument('--all_transformations_path', type=str, default="full_trans.json", help='Path to the JSON file storing all transformations.')
     parser.add_argument('--transformations', type=str, choices=['one', 'two', 'both'], default='one', help='Specify which transformations to perform: "one", "two", or "both".')
     parser.add_argument('--transformation_op', type=str, nargs='*', help='Specify the transformation operators to be used in sample_and_apply.')
+    parser.add_argument('--timeout', type=float, default=2.0, help='Per-sample generation timeout in seconds (increase if you see many timeouts).')
 
     args = parser.parse_args()
 
@@ -77,9 +76,29 @@ def main():
 
     # Parse the transformation operators
     transformation_ops = args.transformation_op if args.transformation_op else None
-    
-    generate_samples(args.samples, args.one_trans_folder, args.all_transformations_path,
-                     no_of_trans=3, transformation_ops=args.transformation_op)
+
+    # Run generation according to selected mode
+    if args.transformations in ['one', 'both']:
+        # One-step transformation chains
+        generate_samples(
+            args.samples,
+            args.one_trans_folder,
+            args.all_transformations_path,
+            no_of_trans=1,
+            transformation_ops=transformation_ops,
+            timeout=args.timeout,
+        )
+
+    if args.transformations in ['two', 'both']:
+        # Two-step transformation chains
+        generate_samples(
+            args.samples,
+            args.two_trans_folder,
+            args.all_transformations_path,
+            no_of_trans=2,
+            transformation_ops=transformation_ops,
+            timeout=args.timeout,
+        )
 
 if __name__ == "__main__":
     main()
