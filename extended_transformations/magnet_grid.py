@@ -1,6 +1,5 @@
 from copy import deepcopy
 import numpy as np
-from collections import deque
 from extended_transformations.utils import *
 
 
@@ -16,9 +15,7 @@ def magnet_grid_based(
         direction = shifting_direction
 
         if direction not in {"right", "left", "up", "down"}:
-            raise ValueError(
-                "Invalid direction. Choose from 'right', 'left', 'up', 'down'."
-            )
+            raise ValueError("Invalid direction. Choose from 'right', 'left', 'up', 'down'.")
 
         rows = len(grid)
         cols = len(grid[0]) if grid else 0
@@ -157,9 +154,7 @@ def magnet_grid_based(
     if magnet_type == "pixel":
         direction = shifting_direction
         if direction not in {"left", "right", "up", "down"}:
-            raise ValueError(
-                "Invalid direction. Choose from 'left', 'right', 'up', 'down'."
-            )
+            raise ValueError("Invalid direction. Choose from 'left', 'right', 'up', 'down'.")
 
         new_grid = deepcopy(grid)
 
@@ -181,10 +176,7 @@ def magnet_grid_based(
                     for col in range(cols - 1, -1, -1):
                         if new_grid[row][col] == color1:
                             target_col = col
-                            while (
-                                target_col < cols - 1
-                                and new_grid[row][target_col + 1] == 0
-                            ):
+                            while target_col < cols - 1 and new_grid[row][target_col + 1] == 0:
                                 target_col += 1
                             if target_col != col:
                                 new_grid[row][col] = 0
@@ -205,10 +197,7 @@ def magnet_grid_based(
                     for row in range(rows - 1, -1, -1):
                         if new_grid[row][col] == color1:
                             target_row = row
-                            while (
-                                target_row < rows - 1
-                                and new_grid[target_row + 1][col] == 0
-                            ):
+                            while target_row < rows - 1 and new_grid[target_row + 1][col] == 0:
                                 target_row += 1
                             if target_row != row:
                                 new_grid[row][col] = 0
@@ -245,9 +234,7 @@ def magnet_grid_based(
     if magnet_type == "match_ver_line_union":
         try:
             col = next(
-                j
-                for j, col_vals in enumerate(zip(*grid))
-                if all(val == color1 for val in col_vals)
+                j for j, col_vals in enumerate(zip(*grid)) if all(val == color1 for val in col_vals)
             )
         except StopIteration:
             raise ValueError(f"No vertical line of {color1}'s found in the grid.")
@@ -392,9 +379,7 @@ def magnet_grid_based(
                 placed = False
 
                 for r in range(rows - obj_height + 1):
-                    max_next_col = max(
-                        next_available_col[r + dr] for dr in range(obj_height)
-                    )
+                    max_next_col = max(next_available_col[r + dr] for dr in range(obj_height))
                     if max_next_col + obj_width <= cols:
                         overlap = False
                         for dr in range(obj_height):
@@ -414,24 +399,18 @@ def magnet_grid_based(
                                 new_c = max_next_col + rel_c
                                 new_grid[new_r][new_c] = object_color
                             for dr in range(obj_height):
-                                next_available_col[r + dr] = (
-                                    max_next_col + obj_width + 1
-                                )
+                                next_available_col[r + dr] = max_next_col + obj_width + 1
                             placed = True
                             break
                 if not placed:
-                    raise Exception(
-                        "Not enough space to place all objects with spacing."
-                    )
+                    raise Exception("Not enough space to place all objects with spacing.")
             return new_grid
 
         object_color = count_most_frequent_color_except_zero(grid)
         objects = detect_objects(grid)
         zero_counts = [count_zeros_in_second_column(grid, obj) for obj in objects]
         sorted_objects = sort_objects(objects, zero_counts)
-        transformed_grid = rearrange_grid_with_spacing_refined(
-            grid, sorted_objects, object_color
-        )
+        transformed_grid = rearrange_grid_with_spacing_refined(grid, sorted_objects, object_color)
         return transformed_grid
 
     if magnet_type == "distract":
@@ -482,17 +461,13 @@ def magnet_grid_based(
         try:
             # Find the column index where all cells have color1 (vertical line)
             line_col = next(
-                idx
-                for idx, col in enumerate(zip(*grid))
-                if all(cell == color1 for cell in col)
+                idx for idx, col in enumerate(zip(*grid)) if all(cell == color1 for cell in col)
             )
         except StopIteration:
             return grid  # If no such line is found, return the original grid
 
         # Extract the object on the left side of the line
-        object_left = {
-            (i, j) for i in range(len(grid)) for j in range(line_col) if grid[i][j] != 0
-        }
+        object_left = {(i, j) for i in range(len(grid)) for j in range(line_col) if grid[i][j] != 0}
 
         # Extract the object on the right side of the line
         object_right = {
@@ -525,9 +500,7 @@ def magnet_grid_based(
     if magnet_type == "match_hor_line_union":
         try:
             # Find the row index where all cells have color1 (horizontal line)
-            row_idx = next(
-                i for i, row in enumerate(grid) if all(cell == color1 for cell in row)
-            )
+            row_idx = next(i for i, row in enumerate(grid) if all(cell == color1 for cell in row))
         except StopIteration:
             raise ValueError(f"No horizontal line of {color1}'s found in the grid.")
 
@@ -541,10 +514,7 @@ def magnet_grid_based(
 
         # Merge the top and bottom grids by taking the union of their non-zero cells
         transformed_grid = [
-            [
-                color2 if top_grid[i][j] != 0 or bottom_grid[i][j] != 0 else 0
-                for j in range(cols)
-            ]
+            [color2 if top_grid[i][j] != 0 or bottom_grid[i][j] != 0 else 0 for j in range(cols)]
             for i in range(min_rows)
         ]
 
@@ -553,17 +523,12 @@ def magnet_grid_based(
     if magnet_type == "match_hor_diff":
         try:
             line_row = next(
-                idx
-                for idx, row in enumerate(grid)
-                if all(cell == color1 for cell in row)
+                idx for idx, row in enumerate(grid) if all(cell == color1 for cell in row)
             )
         except StopIteration:
             return grid
         object_above = {
-            (i, j)
-            for i in range(line_row)
-            for j, cell in enumerate(grid[i])
-            if cell != 0
+            (i, j) for i in range(line_row) for j, cell in enumerate(grid[i]) if cell != 0
         }
         num_rows = max(x for x, _ in object_above) + 1
         num_cols = max(y for _, y in object_above) + 1
@@ -647,10 +612,7 @@ def magnet_grid_based(
             top_grid = adjust_grid(top_grid, desired_rows, cols)
             bottom_grid = adjust_grid(bottom_grid, desired_rows, cols)
             final_grid = [
-                [
-                    color2 if top_grid[r][c] or bottom_grid[r][c] else 0
-                    for c in range(cols)
-                ]
+                [color2 if top_grid[r][c] or bottom_grid[r][c] else 0 for c in range(cols)]
                 for r in range(desired_rows)
             ]
             return final_grid
@@ -710,8 +672,7 @@ def magnet_grid_based(
                     idx = min(r // group_size, grid_size - 1)
                     groups[idx].append((c, val))
         output_grid = [
-            [val for _, val in sorted(group, key=lambda x: x[0])]
-            + [0] * (grid_size - len(group))
+            [val for _, val in sorted(group, key=lambda x: x[0])] + [0] * (grid_size - len(group))
             for group in groups
         ]
         output_grid = (output_grid + [[0] * grid_size] * grid_size)[:grid_size]

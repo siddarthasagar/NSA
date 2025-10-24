@@ -1,5 +1,4 @@
 import numpy as np
-from collections import deque, defaultdict
 import copy
 from extended_transformations.utils import *
 
@@ -31,8 +30,9 @@ def beam_grid_based(grid, color1=0, color2: int = 0, beam_type="color_inheritanc
                 transformed_grid[row][col] = color1
 
             perimeter_cells = (
-                {(min_row, col) for col in range(min_col, max_col + 1)}
-                .union({(max_row, col) for col in range(min_col, max_col + 1)})
+                {(min_row, col) for col in range(min_col, max_col + 1)}.union(
+                    {(max_row, col) for col in range(min_col, max_col + 1)}
+                )
                 .union({(row, min_col) for row in range(min_row, max_row + 1)})
                 .union({(row, max_col) for row in range(min_row, max_row + 1)})
             )
@@ -79,17 +79,9 @@ def beam_grid_based(grid, color1=0, color2: int = 0, beam_type="color_inheritanc
                 rectangle_labels[r][c] = idx
         edge_pixels = (
             [(0, c, 1, 0) for c in range(cols) if transformed_grid[0][c] == color2]
-            + [
-                (rows - 1, c, -1, 0)
-                for c in range(cols)
-                if transformed_grid[rows - 1][c] == color2
-            ]
+            + [(rows - 1, c, -1, 0) for c in range(cols) if transformed_grid[rows - 1][c] == color2]
             + [(r, 0, 0, 1) for r in range(rows) if transformed_grid[r][0] == color2]
-            + [
-                (r, cols - 1, 0, -1)
-                for r in range(rows)
-                if transformed_grid[r][cols - 1] == color2
-            ]
+            + [(r, cols - 1, 0, -1) for r in range(rows) if transformed_grid[r][cols - 1] == color2]
         )
         recolored_rectangles = set()
         for r, c, dr, dc in edge_pixels:
@@ -104,9 +96,7 @@ def beam_grid_based(grid, color1=0, color2: int = 0, beam_type="color_inheritanc
                 else:
                     transformed_grid[nr][nc] = color2
 
-                for adj_r, adj_c in get_neighbors(
-                    (nr, nc), (rows, cols), connectivity=4
-                ):
+                for adj_r, adj_c in get_neighbors((nr, nc), (rows, cols), connectivity=4):
                     if transformed_grid[adj_r][adj_c] == color1:
                         adj_rect_id = rectangle_labels[adj_r][adj_c]
                         if adj_rect_id not in recolored_rectangles:
@@ -119,10 +109,7 @@ def beam_grid_based(grid, color1=0, color2: int = 0, beam_type="color_inheritanc
     elif beam_type == "linspace":
         n_rows, n_cols = len(grid), len(grid[0]) if grid else 0
         positions = sorted(
-            (i, j)
-            for i, row in enumerate(grid)
-            for j, val in enumerate(row)
-            if val == color1
+            (i, j) for i, row in enumerate(grid) for j, val in enumerate(row) if val == color1
         )
         delta_row, delta_col = (
             positions[1][0] - positions[0][0],
@@ -138,9 +125,7 @@ def beam_grid_based(grid, color1=0, color2: int = 0, beam_type="color_inheritanc
 
     elif beam_type == "rectangle_shooting":
         rows, cols = len(grid), len(grid[0])
-        positions = [
-            (r, c) for r in range(rows) for c in range(cols) if grid[r][c] == color1
-        ]
+        positions = [(r, c) for r in range(rows) for c in range(cols) if grid[r][c] == color1]
         min_row = min(r for r, _ in positions)
         max_row = max(r for r, _ in positions)
         min_col = min(c for _, c in positions)
@@ -217,17 +202,10 @@ def beam_grid_based(grid, color1=0, color2: int = 0, beam_type="color_inheritanc
             None,
         )
         color_counts = Counter(
-            cell
-            for i in range(line_of_color1_row)
-            for cell in grid[i]
-            if cell not in {0, color1}
+            cell for i in range(line_of_color1_row) for cell in grid[i] if cell not in {0, color1}
         )
         most_frequent_color = min(
-            (
-                color
-                for color, count in color_counts.items()
-                if count == max(color_counts.values())
-            ),
+            (color for color, count in color_counts.items() if count == max(color_counts.values())),
             default=0,
         )
         transformed_grid[-1][mid_col] = most_frequent_color

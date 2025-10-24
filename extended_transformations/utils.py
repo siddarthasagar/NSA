@@ -1,5 +1,4 @@
-from collections import deque, defaultdict, Counter
-import copy
+from collections import deque, Counter
 import numpy as np
 
 
@@ -42,8 +41,7 @@ def swap_with_zero(grid, color=None):
     if color is None:
         color = count_most_frequent_color_except_zero(grid)
     return [
-        [0 if cell == color else (color if cell == 0 else cell) for cell in row]
-        for row in grid
+        [0 if cell == color else (color if cell == 0 else cell) for cell in row] for row in grid
     ]
 
 
@@ -124,9 +122,7 @@ def rotate_grid(grid, degrees):
     elif degrees == 0:
         return grid
     else:
-        raise ValueError(
-            f"Invalid rotation angle: {degrees}. Use 0, 90, 180, or 270 degrees."
-        )
+        raise ValueError(f"Invalid rotation angle: {degrees}. Use 0, 90, 180, or 270 degrees.")
 
 
 def is_component_inside(color, bounds):
@@ -141,10 +137,7 @@ def collect_positions_by_color(grid, colors):
     positions_by_color = {}
     for color in colors:
         positions = [
-            (i, j)
-            for i, row in enumerate(grid)
-            for j, val in enumerate(row)
-            if val == color
+            (i, j) for i, row in enumerate(grid) for j, val in enumerate(row) if val == color
         ]
         positions_by_color[color] = positions
     return positions_by_color
@@ -259,16 +252,14 @@ def is_valid_duplication(grid, mirrored_component, color_bounds, color1, color2)
     return True
 
 
-def find_connected_components(
-    grid, target_colors=None, background_color=0, connectivity=4
-):
+def find_connected_components(grid, target_colors=None, background_color=0, connectivity=4):
     rows = len(grid)
     cols = len(grid[0]) if rows > 0 else 0
     visited = [[False for _ in range(cols)] for _ in range(rows)]
     objects = []
 
     if target_colors is None:
-        all_colors = set(cell for row in grid for cell in row)
+        all_colors = {cell for row in grid for cell in row}
         target_colors = all_colors - {background_color}
 
     for r in range(rows):
@@ -490,10 +481,7 @@ def find_zero_rectangles(grid_np, background_color):
                     for dx, dy in directions:
                         nx, ny = x + dx, y + dy
                         if 0 <= nx < rows and 0 <= ny < cols:
-                            if (
-                                not visited[nx][ny]
-                                and grid_np[nx][ny] != background_color
-                            ):
+                            if not visited[nx][ny] and grid_np[nx][ny] != background_color:
                                 visited[nx][ny] = True
                                 queue.append((nx, ny))
 

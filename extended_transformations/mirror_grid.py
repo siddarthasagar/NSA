@@ -1,5 +1,4 @@
 import numpy as np
-from collections import deque, Counter
 import copy
 from extended_transformations.utils import *
 
@@ -56,9 +55,7 @@ def mirror_grid_based(
     elif mirror_type == "upside_down":
         rows, cols = len(grid), len(grid[0])
         objects = find_connected_components(grid, background_color=0, connectivity=8)
-        objects.sort(
-            key=lambda obj: find_bounding_rectangle(obj["pixels"])[0]
-        )  # Sort by min_row
+        objects.sort(key=lambda obj: find_bounding_rectangle(obj["pixels"])[0])  # Sort by min_row
         for obj in objects:
             min_row, max_row, min_col, max_col = find_bounding_rectangle(
                 [(r, c) for r, c in obj["pixels"]]
@@ -96,16 +93,12 @@ def mirror_grid_based(
                     center_col = (min_col + max_col) / 2
 
                     mirrored_y = mirror_component(c2, "y", center_row, center_col)
-                    if is_valid_duplication(
-                        new_grid, mirrored_y, bounds, color1, color2
-                    ):
+                    if is_valid_duplication(new_grid, mirrored_y, bounds, color1, color2):
                         for r, c in mirrored_y:
                             new_grid[r][c] = color2
                     else:
                         mirrored_x = mirror_component(c2, "x", center_row, center_col)
-                        if is_valid_duplication(
-                            new_grid, mirrored_x, bounds, color1, color2
-                        ):
+                        if is_valid_duplication(new_grid, mirrored_x, bounds, color1, color2):
                             for r, c in mirrored_x:
                                 new_grid[r][c] = color2
                     break
@@ -117,23 +110,19 @@ def mirror_grid_based(
         zero_components = find_connected_all_directions_by_color(grid, color=0)
         zero_component = max(zero_components, key=lambda comp: len(comp))
         min_row, max_row, min_col, max_col = find_bounding_rectangle(zero_component)
-        all_colors = set(cell for row in grid for cell in row)
+        all_colors = {cell for row in grid for cell in row}
         target_colors = all_colors - {0, background_color}
         objects = find_connected_components(
             grid, target_colors=target_colors, background_color=background_color
         )
         for obj in objects:
             pixels = obj["pixels"]
-            overlaps = any(
-                min_row <= r <= max_row and min_col <= c <= max_col for r, c in pixels
-            )
+            overlaps = any(min_row <= r <= max_row and min_col <= c <= max_col for r, c in pixels)
             if not overlaps:
                 break
 
         obj_min_r, obj_max_r, obj_min_c, obj_max_c = find_bounding_rectangle(pixels)
-        object_subgrid = extract_rectangle(
-            grid, (obj_min_r, obj_min_c, obj_max_r, obj_max_c)
-        )
+        object_subgrid = extract_rectangle(grid, (obj_min_r, obj_min_c, obj_max_r, obj_max_c))
         mirrored_object = [row[::-1] for row in object_subgrid]
         obj_height = len(mirrored_object)
         obj_width = len(mirrored_object[0])

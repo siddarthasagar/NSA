@@ -43,9 +43,7 @@ def connect_grid_based(
 
     elif connect_mode == "connect_fill":
         rows, cols = len(grid), len(grid[0])
-        twos = [
-            (r, c) for r in range(rows) for c in range(cols) if grid[r][c] == fill_color
-        ]
+        twos = [(r, c) for r in range(rows) for c in range(cols) if grid[r][c] == fill_color]
         for r, c in twos:
             for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 nr, nc = r, c
@@ -63,12 +61,7 @@ def connect_grid_based(
             r, c = queue.popleft()
             for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 nr, nc = r + dr, c + dc
-                if (
-                    0 <= nr < rows
-                    and 0 <= nc < cols
-                    and not visited[nr][nc]
-                    and grid[nr][nc] == 0
-                ):
+                if 0 <= nr < rows and 0 <= nc < cols and not visited[nr][nc] and grid[nr][nc] == 0:
                     visited[nr][nc] = True
                     queue.append((nr, nc))
         for r in range(rows):
@@ -79,28 +72,18 @@ def connect_grid_based(
 
     elif connect_mode == "connect_to_rectangle":
         positions = [
-            (r, c)
-            for r, row in enumerate(grid)
-            for c, v in enumerate(row)
-            if v == fill_color
+            (r, c) for r, row in enumerate(grid) for c, v in enumerate(row) if v == fill_color
         ]
         min_row, max_row, min_col, max_col = find_bounding_rectangle(positions)
         for r in range(min_row, max_row + 1):
             for c in range(min_col, max_col + 1):
                 if r in {min_row, max_row} or c in {min_col, max_col}:
-                    grid[r][c] = (
-                        border_color if grid[r][c] != fill_color else grid[r][c]
-                    )
+                    grid[r][c] = border_color if grid[r][c] != fill_color else grid[r][c]
         return grid
 
     elif connect_mode == "connect_with_line":
         c_bf, c_fw = color, fill_color
-        cells = {
-            (i, j)
-            for i, row in enumerate(grid)
-            for j, cell in enumerate(row)
-            if cell == c_bf
-        }
+        cells = {(i, j) for i, row in enumerate(grid) for j, cell in enumerate(row) if cell == c_bf}
 
         def connect(a, b):
             ai, aj = a
@@ -118,9 +101,7 @@ def connect_grid_based(
                 return frozenset(zip(range(si, ei + 1), range(ej, sj - 1, -1)))
             return frozenset()
 
-        connected_patches = {
-            patch for a in cells for b in cells if (patch := connect(a, b))
-        }
+        connected_patches = {patch for a in cells for b in cells if (patch := connect(a, b))}
 
         line_patches = {
             patch
@@ -135,16 +116,10 @@ def connect_grid_based(
 
     elif connect_mode == "connect_taxicab":
         color_cells = [
-            (r, c)
-            for r, row in enumerate(grid)
-            for c, v in enumerate(row)
-            if v == color
+            (r, c) for r, row in enumerate(grid) for c, v in enumerate(row) if v == color
         ]
         fill_cells = [
-            (r, c)
-            for r, row in enumerate(grid)
-            for c, v in enumerate(row)
-            if v == fill_color
+            (r, c) for r, row in enumerate(grid) for c, v in enumerate(row) if v == fill_color
         ]
         anchor = (fill_cells[0][0], color_cells[0][1])
 
@@ -165,10 +140,7 @@ def connect_grid_based(
     elif connect_mode == "connect_with_intersection":
         partitioned_objects = frozenset(
             frozenset(
-                (v, (i, j))
-                for i, row in enumerate(grid)
-                for j, v in enumerate(row)
-                if v == color
+                (v, (i, j)) for i, row in enumerate(grid) for j, v in enumerate(row) if v == color
             )
             for color in frozenset({v for row in grid for v in row})
         )
@@ -185,15 +157,13 @@ def connect_grid_based(
         filtered_horizontal = frozenset(
             obj
             for obj in recolored_objects
-            if len(set(i for _, (i, _) in obj)) == 1
-            and len(set(j for _, (_, j) in obj)) > 1
+            if len({i for _, (i, _) in obj}) == 1 and len({j for _, (_, j) in obj}) > 1
         )
 
         filtered_vertical = frozenset(
             obj
             for obj in recolored_objects
-            if len(set(j for _, (_, j) in obj)) == 1
-            and len(set(i for _, (i, _) in obj)) > 1
+            if len({j for _, (_, j) in obj}) == 1 and len({i for _, (i, _) in obj}) > 1
         )
 
         h, w = len(grid), len(grid[0])
@@ -203,9 +173,7 @@ def connect_grid_based(
                 if 0 <= i < h and 0 <= j < w:
                     I_painted_horizontal[i][j] = value
 
-        grid_painted_vertical = [
-            [I_painted_horizontal[i][j] for j in range(w)] for i in range(h)
-        ]
+        grid_painted_vertical = [[I_painted_horizontal[i][j] for j in range(w)] for i in range(h)]
         for obj in filtered_vertical:
             for value, (i, j) in obj:
                 if 0 <= i < h and 0 <= j < w:
@@ -217,7 +185,7 @@ def connect_grid_based(
 
     elif connect_mode == "cross_mode":
         background_color = max(
-            set(val for row in grid for val in row),
+            {val for row in grid for val in row},
             key=lambda c: sum(row.count(c) for row in grid),
         )
         foreground_components = find_connected_components(
@@ -257,9 +225,7 @@ def connect_grid_based(
                 for comp in foreground_components
             )
         ]
-        intersection_lines = (
-            set.intersection(*extended_lines) if extended_lines else set()
-        )
+        intersection_lines = set.intersection(*extended_lines) if extended_lines else set()
         for i, j in intersection_lines:
             if 0 <= i < height and 0 <= j < width:
                 grid_painted[i][j] = color
@@ -281,9 +247,7 @@ def connect_grid_based(
             (value for row in grid for value in row),
             key=lambda v: sum(row.count(v) for row in grid),
         )
-        foreground_colors = {
-            value for row in grid for value in row if value != background_color
-        }
+        foreground_colors = {value for row in grid for value in row if value != background_color}
         positions_by_color = collect_positions_by_color(grid, foreground_colors)
         final_recolored_patches = set()
         for color, positions in positions_by_color.items():
@@ -291,17 +255,11 @@ def connect_grid_based(
                 first, last = min(positions), max(positions)
                 si, sj, ei, ej = *first, *last
                 if si == ei:
-                    connected_line = {
-                        (si, j) for j in range(min(sj, ej), max(sj, ej) + 1)
-                    }
+                    connected_line = {(si, j) for j in range(min(sj, ej), max(sj, ej) + 1)}
                 elif sj == ej:
-                    connected_line = {
-                        (i, sj) for i in range(min(si, ei), max(si, ei) + 1)
-                    }
+                    connected_line = {(i, sj) for i in range(min(si, ei), max(si, ei) + 1)}
                 elif ei - si == ej - sj:
-                    connected_line = {
-                        (i, j) for i, j in zip(range(si, ei + 1), range(sj, ej + 1))
-                    }
+                    connected_line = {(i, j) for i, j in zip(range(si, ei + 1), range(sj, ej + 1))}
                 elif ei - si == sj - ej:
                     connected_line = {
                         (i, j) for i, j in zip(range(si, ei + 1), range(sj, ej - 1, -1))

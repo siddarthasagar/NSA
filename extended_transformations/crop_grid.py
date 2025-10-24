@@ -21,10 +21,7 @@ def crop_grid_based(
 
     elif crop_type == "count_rectangle":
         positions = [
-            (i, j)
-            for i, row in enumerate(grid)
-            for j, cell in enumerate(row)
-            if cell == fill_color
+            (i, j) for i, row in enumerate(grid) for j, cell in enumerate(row) if cell == fill_color
         ]
         min_row, max_row, min_col, max_col = find_bounding_rectangle(positions)
         rectangle = [row[min_col : max_col + 1] for row in grid[min_row : max_row + 1]]
@@ -34,9 +31,7 @@ def crop_grid_based(
                 if cell != fill_color and cell != 0:
                     other_colors.add(cell)
         other_color = other_colors.pop()
-        count_other_color = sum(
-            cell == other_color for row in rectangle for cell in row
-        )
+        count_other_color = sum(cell == other_color for row in rectangle for cell in row)
         n = count_other_color
         output_grid = [[0 for _ in range(grid_size)] for _ in range(grid_size)]
         for idx in range(min(n, grid_size**2)):
@@ -47,10 +42,7 @@ def crop_grid_based(
 
     elif crop_type == "crop_quadrants":
         positions = [
-            (i, j)
-            for i, row in enumerate(grid)
-            for j, cell in enumerate(row)
-            if cell == fill_color
+            (i, j) for i, row in enumerate(grid) for j, cell in enumerate(row) if cell == fill_color
         ]
         if not positions:
             raise ValueError(f"No pixels of color {fill_color} found in the grid.")
@@ -111,10 +103,7 @@ def crop_grid_based(
                 min_c = min(j for _, j in positions)
                 max_c = max(j for _, j in positions)
                 cropped = [
-                    [
-                        cell if cell != cross_color else 0
-                        for cell in row[min_c : max_c + 1]
-                    ]
+                    [cell if cell != cross_color else 0 for cell in row[min_c : max_c + 1]]
                     for row in subgrid[min_r : max_r + 1]
                 ]
             else:
@@ -139,9 +128,7 @@ def crop_grid_based(
         color_to_fill = count_most_frequent_color_except_zero(grid)
         if color_to_fill is None:
             raise ValueError("No colors found in the grid except zero.")
-        transformed_grid = [
-            [color_to_fill for _ in range(grid_size)] for _ in range(grid_size)
-        ]
+        transformed_grid = [[color_to_fill for _ in range(grid_size)] for _ in range(grid_size)]
         return transformed_grid
 
     elif crop_type == "object_symmetry":
@@ -161,8 +148,7 @@ def crop_grid_based(
         positions = [(i, j) for i, j, color in sym_obj]
         min_row, max_row, min_col, max_col = find_bounding_rectangle(positions)
         desired_grid = [
-            [grid[i][j] for j in range(min_col, max_col + 1)]
-            for i in range(min_row, max_row + 1)
+            [grid[i][j] for j in range(min_col, max_col + 1)] for i in range(min_row, max_row + 1)
         ]
         return desired_grid
 
@@ -205,9 +191,7 @@ def crop_grid_based(
                 if 0 <= i_new < height and 0 <= j_new < width:
                     grid_copy[i_new][j_new] = v
                 else:
-                    raise IndexError(
-                        f"Cannot place pixel at ({i_new}, {j_new}) - out of bounds"
-                    )
+                    raise IndexError(f"Cannot place pixel at ({i_new}, {j_new}) - out of bounds")
 
         transformed_grid = resize_grid(grid_copy, grid_size)
         return transformed_grid
@@ -237,22 +221,16 @@ def crop_grid_based(
             selected_object = min(objects, key=delta)
         positions = selected_object["pixels"]
         min_row, max_row, min_col, max_col = find_bounding_rectangle(positions)
-        transformed_grid = [
-            row[min_col : max_col + 1] for row in grid[min_row : max_row + 1]
-        ]
+        transformed_grid = [row[min_col : max_col + 1] for row in grid[min_row : max_row + 1]]
         return transformed_grid
 
     elif crop_type == "extract_colors_adjust":
         groups = [[row] for i, row in enumerate(grid) if i == 0 or row != grid[i - 1]]
         split_indices = [
-            i
-            for i in range(1, len(groups[0][0]))
-            if groups[0][0][i] != groups[0][0][i - 1]
+            i for i in range(1, len(groups[0][0])) if groups[0][0][i] != groups[0][0][i - 1]
         ]
         split_indices = [0] + split_indices + [len(groups[0][0])]
-        desired_grid = [
-            [group[0][start] for start in split_indices[:-1]] for group in groups
-        ]
+        desired_grid = [[group[0][start] for start in split_indices[:-1]] for group in groups]
         return desired_grid
 
     elif crop_type == "extract_colors":
@@ -283,8 +261,7 @@ def crop_grid_based(
         min_r, max_r = min(i for i, _ in first), max(i for i, _ in first)
         min_c, max_c = min(j for _, j in first), max(j for _, j in first)
         sub = tuple(
-            tuple(grid[i][j] for j in range(min_c, max_c + 1))
-            for i in range(min_r, max_r + 1)
+            tuple(grid[i][j] for j in range(min_c, max_c + 1)) for i in range(min_r, max_r + 1)
         )
         dedup = tuple(dict.fromkeys(sub))
         rotated = tuple(zip(*dedup[::-1]))
@@ -298,9 +275,7 @@ def crop_grid_based(
         for obj in objects:
             positions = obj["pixels"]
             min_row, max_row, min_col, max_col = find_bounding_rectangle(positions)
-            subgrid = [
-                row[min_col : max_col + 1] for row in grid[min_row : max_row + 1]
-            ]
+            subgrid = [row[min_col : max_col + 1] for row in grid[min_row : max_row + 1]]
 
             rows = len(subgrid)
             cols = len(subgrid[0])
@@ -309,9 +284,7 @@ def crop_grid_based(
             queue = deque()
             for i in range(rows):
                 for j in range(cols):
-                    if (i == 0 or i == rows - 1 or j == 0 or j == cols - 1) and subgrid[
-                        i
-                    ][j] == 0:
+                    if (i == 0 or i == rows - 1 or j == 0 or j == cols - 1) and subgrid[i][j] == 0:
                         queue.append((i, j))
                         visited[i][j] = True
             while queue:
@@ -347,16 +320,11 @@ def crop_grid_based(
             [row[c : c + 2] for row in grid[r : r + 2]]
             for r, c in [(0, 0), (0, cols - 2), (rows - 2, 0)]
         ]
-        all_rotations = {
-            angle: rotate_grid(subgrids[0], angle) for angle in [0, 90, 180, 270]
-        }
+        all_rotations = {angle: rotate_grid(subgrids[0], angle) for angle in [0, 90, 180, 270]}
         present_rotations = {
-            angle
-            for angle, pattern in all_rotations.items()
-            for obj in subgrids
-            if obj == pattern
+            angle for angle, pattern in all_rotations.items() for obj in subgrids if obj == pattern
         }
-        missing_angle = (set([0, 90, 180, 270]) - present_rotations).pop()
+        missing_angle = ({0, 90, 180, 270} - present_rotations).pop()
         return all_rotations[missing_angle]
 
     elif crop_type == "whole_based":
@@ -367,9 +335,7 @@ def crop_grid_based(
         for obj in objects:
             positions = obj["pixels"]
             min_row, max_row, min_col, max_col = find_bounding_rectangle(positions)
-            subgrid = [
-                row[min_col : max_col + 1] for row in grid[min_row : max_row + 1]
-            ]
+            subgrid = [row[min_col : max_col + 1] for row in grid[min_row : max_row + 1]]
             rows = len(subgrid)
             cols = len(subgrid[0])
             visited = [[False] * cols for _ in range(rows)]
@@ -377,9 +343,7 @@ def crop_grid_based(
             directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
             for i in range(rows):
                 for j in range(cols):
-                    if (i == 0 or i == rows - 1 or j == 0 or j == cols - 1) and subgrid[
-                        i
-                    ][j] == 0:
+                    if (i == 0 or i == rows - 1 or j == 0 or j == cols - 1) and subgrid[i][j] == 0:
                         queue.append((i, j))
                         visited[i][j] = True
             while queue:
@@ -427,10 +391,8 @@ def crop_grid_based(
                 if current_color == background_color:
                     c += 1
                     continue
-                start_c = c
                 while c < cols and grid[r][c] == current_color:
                     c += 1
-                end_c = c
                 rectangle_counts[current_color] += 1
 
         sorted_colors = sorted(rectangle_counts.items(), key=lambda x: (-x[0], -x[1]))
@@ -489,9 +451,7 @@ def crop_grid_based(
         target_object = target_objects[0]
         positions = target_object["pixels"]
         min_row, max_row, min_col, max_col = find_bounding_rectangle(positions)
-        desired_grid = [
-            row[min_col : max_col + 1] for row in grid[min_row : max_row + 1]
-        ]
+        desired_grid = [row[min_col : max_col + 1] for row in grid[min_row : max_row + 1]]
         return desired_grid
 
     elif crop_type == "extract_colors_and_sort":
@@ -507,9 +467,7 @@ def crop_grid_based(
                 for j in range(width):
                     if grid[i][j] != 0 and not visited[i][j]:
                         obj = []
-                        deep_first_search_object_based(
-                            i, j, obj, height, width, visited, grid
-                        )
+                        deep_first_search_object_based(i, j, obj, height, width, visited, grid)
                         if obj:
                             objects.append(obj)
         color_count = {}
@@ -523,13 +481,17 @@ def crop_grid_based(
                     if color != 0:
                         color_count[color] = color_count.get(color, 0) + 1
         sorted_colors = sorted(color_count.items(), key=lambda x: -x[1])
-        max_count, num_colors = max(count for _, count in sorted_colors), len(
-            color_count
+        max_count, num_colors = (
+            max(count for _, count in sorted_colors),
+            len(color_count),
         )
-        row_dirs, col_dirs = {"left_to_right", "right_to_left"}, {
-            "up_to_down",
-            "down_to_up",
-        }
+        row_dirs, col_dirs = (
+            {"left_to_right", "right_to_left"},
+            {
+                "up_to_down",
+                "down_to_up",
+            },
+        )
         if fill_direction in row_dirs:
             rows, cols = num_colors, max_count
         elif fill_direction in col_dirs:
@@ -591,8 +553,7 @@ def crop_grid_based(
                 "Invalid corner. Choose from 'left upper', 'right upper', 'left lower', 'right lower'."
             )
         return [
-            row[start[1] : start[1] + grid_size]
-            for row in grid[start[0] : start[0] + grid_size]
+            row[start[1] : start[1] + grid_size] for row in grid[start[0] : start[0] + grid_size]
         ]
     else:
         raise Exception(f"Wrong crop_type! You provided {crop_type}")

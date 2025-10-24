@@ -1,9 +1,7 @@
 from extended_transformations.utils import *
 
 
-def upscale_grid_based(
-    grid, factor, mirror, upscale_type, color, border_color, fill_color
-):
+def upscale_grid_based(grid, factor, mirror, upscale_type, color, border_color, fill_color):
     if upscale_type == "standard":
         upscaled_grid = []
         for i, row in enumerate(grid):
@@ -14,8 +12,8 @@ def upscale_grid_based(
                         new_rows[k].extend([0] * factor)
                 elif value == border_color:
                     for k in range(factor):
-                        for l in range(factor):
-                            if ((i * factor + k) + (j * factor + l)) % 2 == 0:
+                        for col_off in range(factor):
+                            if ((i * factor + k) + (j * factor + col_off)) % 2 == 0:
                                 val = color
                             else:
                                 val = fill_color
@@ -27,9 +25,7 @@ def upscale_grid_based(
         if mirror:
             grid = swap_with_zero(grid)
         upscaled_grid = [
-            [value for value in row for _ in range(factor)]
-            for row in grid
-            for _ in range(factor)
+            [value for value in row for _ in range(factor)] for row in grid for _ in range(factor)
         ]
         tiled_grid = [row * factor for _ in range(factor) for row in grid]
         transformed_grid = [
@@ -42,7 +38,5 @@ def upscale_grid_based(
         factor = count_unique_colors_except_zero(grid)
 
     return tuple(
-        tuple(value for value in row for _ in range(factor))
-        for row in grid
-        for _ in range(factor)
+        tuple(value for value in row for _ in range(factor)) for row in grid for _ in range(factor)
     )

@@ -29,4 +29,3 @@ def size_equal(obj1_size, obj2_size):
     :param obj2_size: size of obj2
     """
     return obj1_size == obj2_size
-

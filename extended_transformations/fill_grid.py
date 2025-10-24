@@ -2,10 +2,7 @@ def fill_grid_based(grid, object, color, color1):
     if object == "empty_rectangle":
         h, w = len(grid), len(grid[0]) if grid else 0
         grid_filled = [
-            [
-                color if i in (0, h - 1) or j in (0, w - 1) else cell
-                for j, cell in enumerate(row)
-            ]
+            [color if i in (0, h - 1) or j in (0, w - 1) else cell for j, cell in enumerate(row)]
             for i, row in enumerate(grid)
         ]
         return tuple(map(tuple, grid_filled))
@@ -14,10 +11,7 @@ def fill_grid_based(grid, object, color, color1):
         value = next((val for row in grid for val in row if val != 0), None)
         rows, cols = len(grid), len(grid[0])
         return [
-            [
-                value if i in {0, rows - 1} or j in {0, cols - 1} else 0
-                for j in range(cols)
-            ]
+            [value if i in {0, rows - 1} or j in {0, cols - 1} else 0 for j in range(cols)]
             for i in range(rows)
         ]
 
@@ -26,10 +20,7 @@ def fill_grid_based(grid, object, color, color1):
         grid_copy = [row[:] for row in grid]
         while True:
             dp = [
-                [
-                    1 if grid_copy[i][j] == 0 and (i == 0 or j == 0) else 0
-                    for j in range(cols)
-                ]
+                [1 if grid_copy[i][j] == 0 and (i == 0 or j == 0) else 0 for j in range(cols)]
                 for i in range(rows)
             ]
             max_size, max_i, max_j = 0, -1, -1
@@ -61,9 +52,7 @@ def fill_grid_based(grid, object, color, color1):
             elif color1 in rightmost_column:
                 return "right"
             else:
-                raise ValueError(
-                    f"No color {color1} found in the leftmost or rightmost column."
-                )
+                raise ValueError(f"No color {color1} found in the leftmost or rightmost column.")
 
         def swap_and_modify_grid(grid, color1, color2):
             swapped_grid = []

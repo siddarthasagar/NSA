@@ -1,4 +1,4 @@
-from collections import deque, defaultdict
+from collections import defaultdict
 import copy
 from extended_transformations.utils import *
 
@@ -6,9 +6,7 @@ from extended_transformations.utils import *
 def recolor_grid_based(grid, recolor_type, color1, color2, shifting_direction):
     if recolor_type == "fill_blank":
         transformed_grid = copy.deepcopy(grid)
-        objects = find_connected_components(
-            grid, target_colors={color1}, connectivity=8
-        )
+        objects = find_connected_components(grid, target_colors={color1}, connectivity=8)
 
         for idx, obj in enumerate(objects, 1):
             pixels = obj["pixels"]
@@ -72,9 +70,7 @@ def recolor_grid_based(grid, recolor_type, color1, color2, shifting_direction):
                 )
                 if any(v != 0 for row in square for v in row):
                     squares[square].append((i, j))
-        unique = next(
-            ((sq, pos[0]) for sq, pos in squares.items() if len(pos) == 1), None
-        )
+        unique = next(((sq, pos[0]) for sq, pos in squares.items() if len(pos) == 1), None)
         unique_square, (i, j) = unique
         color = next(v for row in unique_square for v in row if v != 0)
         positions = {

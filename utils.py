@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class Direction(str, Enum):
     UP = "UP"
     DOWN = "DOWN"

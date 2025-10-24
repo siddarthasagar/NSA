@@ -1,7 +1,7 @@
 # NSA: Neuro-symbolic ARC Challenge - Training Pipeline
 # ======================================================
 
-.PHONY: main add-deps dev train generate-data generate-large eval help
+.PHONY: main add-deps dev train generate-data generate-large eval help format lint
 
 # Default target - show help
 help:
@@ -20,6 +20,10 @@ help:
 	@echo "Training:"
 	@echo "  make train         - Train model (requires generated data in full_trans.json)"
 	@echo "  make train-quick   - Quick training test (5 epochs, useful for debugging)"
+	@echo ""
+	@echo "Code quality:"
+	@echo "  make format        - Run pyupgrade (py311), ruff format, and ruff fix"
+	@echo "  make lint          - Report Ruff diagnostics without fixing (fails on issues)"
 	@echo ""
 	@echo "Evaluation:"
 	@echo "  make eval          - Evaluate trained model on test set"
@@ -64,7 +68,7 @@ train:
 
 train-quick:
 	@echo "Quick training run (5 epochs) for testing..."
-	$(MAKE) train ARGS="--data_path full_trans.json --save_iterations 10 --print_iterations 5"
+	$(MAKE) train ARGS="--data_path full_trans.json --save_iterations 10 --print_iterations 5 --epochs 5 --batch_size 4 --max_length 1024"
 
 # Data generation
 generate-data:
@@ -74,13 +78,18 @@ generate-data:
 
 generate-small:
 	@echo "Generating small test dataset (100 samples, 1-step transformations)..."
-	$(MAKE) generate-data ARGS="--samples 100 --transformations one --timeout 2.0"
+	@cores=$$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo "4"); \
+	workers=$$((cores > 1 ? cores - 1 : 1)); \
+	$(MAKE) generate-data ARGS="--samples 100 --transformations one --timeout 2.0 --workers $$workers"
 	@echo "Generated samples for quick testing."
 
 generate-large:
 	@echo "Generating large production dataset (10,000 samples, 1-step and 2-step)..."
-	@echo "This will take ~30-60 minutes. Progress bars will show status."
-	$(MAKE) generate-data ARGS="--samples 10000 --transformations both --timeout 3.0"
+	@cores=$$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo "4"); \
+	workers=$$((cores > 1 ? cores - 1 : 1)); \
+	echo "Detected $$cores CPU cores, using $$workers parallel workers"; \
+	echo "This will take ~10-15 minutes with parallel processing. Progress bars will show status."; \
+	$(MAKE) generate-data ARGS="--samples 10000 --transformations both --timeout 3.0 --workers $$workers"
 	@echo "Large dataset generation complete!"
 
 # Evaluation
@@ -107,3 +116,18 @@ clean-all: clean
 	rm -rf .venv/
 	rm -rf small_transformer_based/results/
 	@echo "Full cleanup complete."
+
+# Code quality and formatting
+format:
+	@echo "Running pyupgrade across the repo (py311)..."
+	@# Apply to all Python files recursively; exit zero even if files changed
+	find . -type f -name "*.py" -not -path "*/.venv/*" -print0 | xargs -0 -n 25 uv run pyupgrade --py311 --exit-zero-even-if-changed || true
+	@echo "Applying Ruff formatting..."
+	uv run ruff format . || true
+	@echo "Applying Ruff autofixes..."
+	uv run ruff check --fix . || true
+	@echo "Format complete. Use 'make lint' to see remaining issues."
+
+lint:
+	@echo "Running Ruff lint (no fixes)..."
+	uv run ruff check .

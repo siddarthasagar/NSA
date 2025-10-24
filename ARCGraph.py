@@ -1,11 +1,8 @@
 import copy
-import numpy as np
 import networkx as nx
-import matplotlib.pyplot as plt
 from itertools import combinations
 from collections import deque
 from utils import *
-from typing import Optional, List
 from copy import deepcopy
 from extended_transformations.crop_grid import crop_grid_based
 from extended_transformations.connect_grid import connect_grid_based
@@ -19,11 +16,15 @@ from extended_transformations.recolor_grid import recolor_grid_based
 from extended_transformations.shift_grid import shift_grid_based
 from extended_transformations.truncate_grid import truncate_grid_based
 from extended_transformations.rotate_duplicate import rotate_duplicate_grid_based
-from extended_transformations.arbitrary_duplicate_grid import arbitrary_duplicate_grid_based
+from extended_transformations.arbitrary_duplicate_grid import (
+    arbitrary_duplicate_grid_based,
+)
+
 
 def swap_with_zero(grid):
     color = next(cell for row in grid for cell in row if cell != 0)
     return [[0 if cell == color else color for cell in row] for row in grid]
+
 
 def count_unique_colors_except_zero(grid):
     """Count the number of unique colors in the grid, excluding 0."""
@@ -34,6 +35,7 @@ def count_unique_colors_except_zero(grid):
                 unique_colors.add(color)
     return len(unique_colors)
 
+
 def count_most_frequent_color_except_zero(grid):
     color_count = {}
     for row in grid:
@@ -42,41 +44,126 @@ def count_most_frequent_color_except_zero(grid):
                 color_count[color] = color_count.get(color, 0) + 1
     return color_count
 
+
 class ARCGraph:
-    colors = ["#000000", "#0074D9", "#FF4136", "#2ECC40", "#FFDC00", "#AAAAAA",
-              "#F012BE", "#FF851B", "#7FDBFF", "#870C25"]
+    colors = [
+        "#000000",
+        "#0074D9",
+        "#FF4136",
+        "#2ECC40",
+        "#FFDC00",
+        "#AAAAAA",
+        "#F012BE",
+        "#FF851B",
+        "#7FDBFF",
+        "#870C25",
+    ]
     img_dir = "images"
     insertion_transformation_ops = ["insert"]
-    param_binding_ops = ["param_bind_neighbor_by_size", "param_bind_neighbor_by_color", "param_bind_node_by_shape",
-                         "param_bind_node_by_size"]
-    
-    filter_ops = ["filter_by_color", "filter_by_size", "filter_by_degree",
-                  "filter_by_neighbor_size", "filter_by_neighbor_color"]
+    param_binding_ops = [
+        "param_bind_neighbor_by_size",
+        "param_bind_neighbor_by_color",
+        "param_bind_node_by_shape",
+        "param_bind_node_by_size",
+    ]
 
-    
+    filter_ops = [
+        "filter_by_color",
+        "filter_by_size",
+        "filter_by_degree",
+        "filter_by_neighbor_size",
+        "filter_by_neighbor_color",
+    ]
+
     transformation_ops = {
-        "nbccg": ["extract", "update_color", "move_node", "extend_node", "move_node_max", "fill_rectangle", "hollow_rectangle",
-                  "add_border", "insert", "mirror", "flip", "rotate_node", "remove_node"],
-        "nbvcg": ["extract","update_color", "move_node", "extend_node", "move_node_max", "remove_node"],
-        "nbhcg": ["extract","update_color", "move_node", "extend_node", "move_node_max", "remove_node"],
-        "ccgbr": ["extract","update_color", "remove_node"],
-        "ccgbr2": ["extract","update_color", "remove_node"],
-        "ccg": ["extract","update_color", "remove_node"],
-        "mcccg": ["extract","move_node", "move_node_max", "rotate_node", "fill_rectangle", "add_border", "insert", "mirror",
-                  "flip", "remove_node"],
-       "na": ["extract",  'duplicate', 'upscale_grid', "crop", "fill", "magnet", "beam", "shift",
-                                  "arbitrary_duplicate", "rotate_duplicate",
-                                  "mirror_grid", 'rotate_grid', "connect", "recolor", "truncate",
-                 "move_node", "move_node_max", "update_color", "extend_node",
-                  "rotate_node", "add_border", "fill_rectangle", "hollow_rectangle", 
-                   "mirror", "flip", "insert", "remove_node"],
-        "lrg": ["extract", "update_color", "move_node", "extend_node", "move_node_max"]
-        }
+        "nbccg": [
+            "extract",
+            "update_color",
+            "move_node",
+            "extend_node",
+            "move_node_max",
+            "fill_rectangle",
+            "hollow_rectangle",
+            "add_border",
+            "insert",
+            "mirror",
+            "flip",
+            "rotate_node",
+            "remove_node",
+        ],
+        "nbvcg": [
+            "extract",
+            "update_color",
+            "move_node",
+            "extend_node",
+            "move_node_max",
+            "remove_node",
+        ],
+        "nbhcg": [
+            "extract",
+            "update_color",
+            "move_node",
+            "extend_node",
+            "move_node_max",
+            "remove_node",
+        ],
+        "ccgbr": ["extract", "update_color", "remove_node"],
+        "ccgbr2": ["extract", "update_color", "remove_node"],
+        "ccg": ["extract", "update_color", "remove_node"],
+        "mcccg": [
+            "extract",
+            "move_node",
+            "move_node_max",
+            "rotate_node",
+            "fill_rectangle",
+            "add_border",
+            "insert",
+            "mirror",
+            "flip",
+            "remove_node",
+        ],
+        "na": [
+            "extract",
+            "duplicate",
+            "upscale_grid",
+            "crop",
+            "fill",
+            "magnet",
+            "beam",
+            "shift",
+            "arbitrary_duplicate",
+            "rotate_duplicate",
+            "mirror_grid",
+            "rotate_grid",
+            "connect",
+            "recolor",
+            "truncate",
+            "move_node",
+            "move_node_max",
+            "update_color",
+            "extend_node",
+            "rotate_node",
+            "add_border",
+            "fill_rectangle",
+            "hollow_rectangle",
+            "mirror",
+            "flip",
+            "insert",
+            "remove_node",
+        ],
+        "lrg": ["extract", "update_color", "move_node", "extend_node", "move_node_max"],
+    }
 
-    dynamic_parameters = {"color", "direction", "point", "mirror_point", "mirror_direction", "mirror_axis"}
+    dynamic_parameters = {
+        "color",
+        "direction",
+        "point",
+        "mirror_point",
+        "mirror_direction",
+        "mirror_axis",
+    }
 
     def __init__(self, graph, name, image, abstraction=None):
-
         self.graph = graph
         self.image = image
         self.abstraction = abstraction
@@ -111,8 +198,8 @@ class ARCGraph:
         width = self.image.width
         grid = [[self.image.background_color for _ in range(width)] for _ in range(height)]
         for node, data in self.graph.nodes(data=True):
-            color = data.get('color', self.image.background_color)
-            sub_nodes = data.get('nodes', [node])
+            color = data.get("color", self.image.background_color)
+            sub_nodes = data.get("nodes", [node])
             if isinstance(color, list):
                 for idx, sub_node in enumerate(sub_nodes):
                     y, x = sub_node
@@ -129,7 +216,7 @@ class ARCGraph:
         self.graph = nx.grid_2d_graph(len(grid), len(grid[0]))
         for y, row in enumerate(grid):
             for x, color in enumerate(row):
-                self.graph.nodes[(y, x)]['color'] = [color]
+                self.graph.nodes[(y, x)]["color"] = [color]
         self.image.grid = grid
 
     def filter_by_color(self, node, color: int, exclude: bool = False):
@@ -144,7 +231,9 @@ class ARCGraph:
                     for color_i in c:
                         if color_i == self.image.background_color:
                             continue
-                        color_sizes[color_i] = color_sizes.get(color_i, 0) + 1  # Increment by 1 for each pixel
+                        color_sizes[color_i] = (
+                            color_sizes.get(color_i, 0) + 1
+                        )  # Increment by 1 for each pixel
                 else:
                     # Single color node
                     if c == self.image.background_color:
@@ -166,7 +255,9 @@ class ARCGraph:
                     for color_i in c:
                         if color_i == self.image.background_color:
                             continue
-                        color_sizes[color_i] = color_sizes.get(color_i, 0) + 1  # Increment by 1 for each pixel
+                        color_sizes[color_i] = (
+                            color_sizes.get(color_i, 0) + 1
+                        )  # Increment by 1 for each pixel
                 else:
                     if c == self.image.background_color:
                         continue
@@ -187,8 +278,6 @@ class ARCGraph:
                 return self.graph.nodes[node]["color"] == color
             else:
                 return self.graph.nodes[node]["color"] != color
-
-
 
     def filter_by_size(self, node, size, exclude: bool = False):
         if size == "max":
@@ -291,16 +380,22 @@ class ARCGraph:
                     return param_bind_node
         return None
 
-    def magnet(self, magnet_type = "dynamic", shifting_direction="dynamic",
-               color1=0, color2=0, 
-               #color3=0, color4=0,
-               grid_size=0
-               ):
+    def magnet(
+        self,
+        magnet_type="dynamic",
+        shifting_direction="dynamic",
+        color1=0,
+        color2=0,
+        # color3=0, color4=0,
+        grid_size=0,
+    ):
         grid = self.graph_to_grid()
-        transformed_grid = magnet_grid_based(grid, magnet_type, shifting_direction, color1, color2, grid_size)
+        transformed_grid = magnet_grid_based(
+            grid, magnet_type, shifting_direction, color1, color2, grid_size
+        )
         self.update_graph_from_grid(transformed_grid)
         return self
-        
+
     def update_color(self, node, color):
         if color == "most":
             color = self.most_common_color
@@ -308,29 +403,53 @@ class ARCGraph:
             color = self.least_common_color
         self.graph.nodes[node]["color"] = color
         return self
-    
+
     def fill(self, object, color, color1):
         grid = self.graph_to_grid()
         transformed_grid = fill_grid_based(grid, object, color, color1)
         self.update_graph_from_grid(transformed_grid)
         return self
-    
 
-    def connect(self, connect_mode: str, color: int, fill_color: int, border_color:int, inherit_vertical:bool):
+    def connect(
+        self,
+        connect_mode: str,
+        color: int,
+        fill_color: int,
+        border_color: int,
+        inherit_vertical: bool,
+    ):
         grid = self.graph_to_grid()
-        transformed_grid = connect_grid_based(grid, connect_mode, color, fill_color, border_color, inherit_vertical)
+        transformed_grid = connect_grid_based(
+            grid, connect_mode, color, fill_color, border_color, inherit_vertical
+        )
         self.update_graph_from_grid(transformed_grid)
         return self
-    
-    def crop(self, corner: str = "right upper", crop_type: str = "corner_based", grid_size: int = 3,
-            fill_color:int=0, border_color:int=0, fill_direction:str = "left_to_right", connect_all:bool=True):
+
+    def crop(
+        self,
+        corner: str = "right upper",
+        crop_type: str = "corner_based",
+        grid_size: int = 3,
+        fill_color: int = 0,
+        border_color: int = 0,
+        fill_direction: str = "left_to_right",
+        connect_all: bool = True,
+    ):
         grid = self.graph_to_grid()
-        transformed_grid = crop_grid_based(grid, corner, crop_type, grid_size, fill_color, border_color, fill_direction, connect_all)
+        transformed_grid = crop_grid_based(
+            grid,
+            corner,
+            crop_type,
+            grid_size,
+            fill_color,
+            border_color,
+            fill_direction,
+            connect_all,
+        )
         self.update_graph_from_grid(transformed_grid)
-        return self        
+        return self
 
-
-    def extract(self, node, crop_filterless: bool=False, fraction: float=0.5):
+    def extract(self, node, crop_filterless: bool = False, fraction: float = 0.5):
         nodes_to_keep = node
         if nodes_to_keep is None:
             nodes_to_keep = list(self.graph.nodes())
@@ -341,11 +460,11 @@ class ARCGraph:
         self.graph.remove_edges_from(list(self.graph.edges()))
         if not crop_filterless:
             return self
-    
+
         all_sub_nodes = []
         for node in nodes_to_keep:
             data = self.graph.nodes[node]
-            sub_nodes = data.get('nodes', [node])
+            sub_nodes = data.get("nodes", [node])
             all_sub_nodes.extend(sub_nodes)
 
         if not all_sub_nodes:
@@ -355,21 +474,18 @@ class ARCGraph:
         total_width = self.image.width
 
         if total_height >= total_width:
-            axis = 'vertical'
+            axis = "vertical"
         else:
-            axis = 'horizontal'
+            axis = "horizontal"
 
-        ys = [n[0] for n in all_sub_nodes]
-        xs = [n[1] for n in all_sub_nodes]
-        min_y, max_y = min(ys), max(ys)
-        min_x, max_x = min(xs), max(xs)
+        # Note: Bounding box extents not required for current crop logic
 
-        if axis == 'horizontal':
+        if axis == "horizontal":
             portion_width = max(1, int(total_width * fraction))
             new_min_x = 0
             new_max_x = portion_width - 1
             nodes_to_keep = [n for n in all_sub_nodes if new_min_x <= n[1] <= new_max_x]
-        elif axis == 'vertical':
+        elif axis == "vertical":
             portion_height = max(1, int(total_height * fraction))
             new_min_y = 0
             new_max_y = portion_height - 1
@@ -380,25 +496,39 @@ class ARCGraph:
         self.graph.clear()
         for n in nodes_to_keep:
             self.graph.add_node(n)
-            self.graph.nodes[n]['color'] = self.image.graph.nodes[n]['color']
-            self.graph.nodes[n]['size'] = 1
-            self.graph.nodes[n]['nodes'] = [n]
+            self.graph.nodes[n]["color"] = self.image.graph.nodes[n]["color"]
+            self.graph.nodes[n]["size"] = 1
+            self.graph.nodes[n]["nodes"] = [n]
         return self
-
-
 
     def move_node(self, node, direction: Direction):
         assert direction is not None
         updated_sub_nodes = []
         delta_x = 0
         delta_y = 0
-        if direction == Direction.UP or direction == Direction.UP_LEFT or direction == Direction.UP_RIGHT:
+        if (
+            direction == Direction.UP
+            or direction == Direction.UP_LEFT
+            or direction == Direction.UP_RIGHT
+        ):
             delta_y = -1
-        elif direction == Direction.DOWN or direction == Direction.DOWN_LEFT or direction == Direction.DOWN_RIGHT:
+        elif (
+            direction == Direction.DOWN
+            or direction == Direction.DOWN_LEFT
+            or direction == Direction.DOWN_RIGHT
+        ):
             delta_y = 1
-        if direction == Direction.LEFT or direction == Direction.UP_LEFT or direction == Direction.DOWN_LEFT:
+        if (
+            direction == Direction.LEFT
+            or direction == Direction.UP_LEFT
+            or direction == Direction.DOWN_LEFT
+        ):
             delta_x = -1
-        elif direction == Direction.RIGHT or direction == Direction.UP_RIGHT or direction == Direction.DOWN_RIGHT:
+        elif (
+            direction == Direction.RIGHT
+            or direction == Direction.UP_RIGHT
+            or direction == Direction.DOWN_RIGHT
+        ):
             delta_x = 1
         for sub_node in self.graph.nodes[node]["nodes"]:
             updated_sub_nodes.append((sub_node[0] + delta_y, sub_node[1] + delta_x))
@@ -411,13 +541,29 @@ class ARCGraph:
         updated_sub_nodes = []
         delta_x = 0
         delta_y = 0
-        if direction == Direction.UP or direction == Direction.UP_LEFT or direction == Direction.UP_RIGHT:
+        if (
+            direction == Direction.UP
+            or direction == Direction.UP_LEFT
+            or direction == Direction.UP_RIGHT
+        ):
             delta_y = -1
-        elif direction == Direction.DOWN or direction == Direction.DOWN_LEFT or direction == Direction.DOWN_RIGHT:
+        elif (
+            direction == Direction.DOWN
+            or direction == Direction.DOWN_LEFT
+            or direction == Direction.DOWN_RIGHT
+        ):
             delta_y = 1
-        if direction == Direction.LEFT or direction == Direction.UP_LEFT or direction == Direction.DOWN_LEFT:
+        if (
+            direction == Direction.LEFT
+            or direction == Direction.UP_LEFT
+            or direction == Direction.DOWN_LEFT
+        ):
             delta_x = -1
-        elif direction == Direction.RIGHT or direction == Direction.UP_RIGHT or direction == Direction.DOWN_RIGHT:
+        elif (
+            direction == Direction.RIGHT
+            or direction == Direction.UP_RIGHT
+            or direction == Direction.DOWN_RIGHT
+        ):
             delta_x = 1
         for sub_node in self.graph.nodes[node]["nodes"]:
             sub_node_y = sub_node[0]
@@ -429,8 +575,10 @@ class ARCGraph:
                 sub_node_x += delta_x
                 if overlap and not self.check_inbound((sub_node_y, sub_node_x)):
                     break
-                elif not overlap and (self.check_collision(node, [(sub_node_y, sub_node_x)])
-                                      or not self.check_inbound((sub_node_y, sub_node_x))):
+                elif not overlap and (
+                    self.check_collision(node, [(sub_node_y, sub_node_x)])
+                    or not self.check_inbound((sub_node_y, sub_node_x))
+                ):
                     break
         self.graph.nodes[node]["nodes"] = list(set(updated_sub_nodes))
         self.graph.nodes[node]["size"] = len(updated_sub_nodes)
@@ -442,13 +590,29 @@ class ARCGraph:
 
         delta_x = 0
         delta_y = 0
-        if direction == Direction.UP or direction == Direction.UP_LEFT or direction == Direction.UP_RIGHT:
+        if (
+            direction == Direction.UP
+            or direction == Direction.UP_LEFT
+            or direction == Direction.UP_RIGHT
+        ):
             delta_y = -1
-        elif direction == Direction.DOWN or direction == Direction.DOWN_LEFT or direction == Direction.DOWN_RIGHT:
+        elif (
+            direction == Direction.DOWN
+            or direction == Direction.DOWN_LEFT
+            or direction == Direction.DOWN_RIGHT
+        ):
             delta_y = 1
-        if direction == Direction.LEFT or direction == Direction.UP_LEFT or direction == Direction.DOWN_LEFT:
+        if (
+            direction == Direction.LEFT
+            or direction == Direction.UP_LEFT
+            or direction == Direction.DOWN_LEFT
+        ):
             delta_x = -1
-        elif direction == Direction.RIGHT or direction == Direction.UP_RIGHT or direction == Direction.DOWN_RIGHT:
+        elif (
+            direction == Direction.RIGHT
+            or direction == Direction.UP_RIGHT
+            or direction == Direction.DOWN_RIGHT
+        ):
             delta_x = 1
         max_allowed = 1000
         for foo in range(max_allowed):
@@ -472,13 +636,23 @@ class ARCGraph:
             mul = -1
 
         for t in range(rotate_times):
-            center_point = (sum([n[0] for n in self.graph.nodes[node]["nodes"]]) // self.graph.nodes[node]["size"],
-                            sum([n[1] for n in self.graph.nodes[node]["nodes"]]) // self.graph.nodes[node]["size"])
+            center_point = (
+                sum([n[0] for n in self.graph.nodes[node]["nodes"]])
+                // self.graph.nodes[node]["size"],
+                sum([n[1] for n in self.graph.nodes[node]["nodes"]])
+                // self.graph.nodes[node]["size"],
+            )
             new_nodes = []
             for sub_node in self.graph.nodes[node]["nodes"]:
-                new_sub_node = (sub_node[0] - center_point[0], sub_node[1] - center_point[1])
-                new_sub_node = (- new_sub_node[1] * mul, new_sub_node[0] * mul)
-                new_sub_node = (new_sub_node[0] + center_point[0], new_sub_node[1] + center_point[1])
+                new_sub_node = (
+                    sub_node[0] - center_point[0],
+                    sub_node[1] - center_point[1],
+                )
+                new_sub_node = (-new_sub_node[1] * mul, new_sub_node[0] * mul)
+                new_sub_node = (
+                    new_sub_node[0] + center_point[0],
+                    new_sub_node[1] + center_point[1],
+                )
                 new_nodes.append(new_sub_node)
             self.graph.nodes[node]["nodes"] = new_nodes
         return self
@@ -490,14 +664,25 @@ class ARCGraph:
             for x in delta:
                 for y in delta:
                     border_pixel = (sub_node[0] + y, sub_node[1] + x)
-                    if border_pixel not in border_pixels and not self.check_pixel_occupied(border_pixel):
+                    if border_pixel not in border_pixels and not self.check_pixel_occupied(
+                        border_pixel
+                    ):
                         border_pixels.append(border_pixel)
         new_node_id = self.generate_node_id(border_color)
         if self.is_multicolor:
-            self.graph.add_node(new_node_id, nodes=list(border_pixels), color=[border_color for j in border_pixels],
-                                size=len(border_pixels))
+            self.graph.add_node(
+                new_node_id,
+                nodes=list(border_pixels),
+                color=[border_color for j in border_pixels],
+                size=len(border_pixels),
+            )
         else:
-            self.graph.add_node(new_node_id, nodes=list(border_pixels), color=border_color, size=len(border_pixels))
+            self.graph.add_node(
+                new_node_id,
+                nodes=list(border_pixels),
+                color=border_color,
+                size=len(border_pixels),
+            )
         return self
 
     def fill_rectangle(self, node, fill_color, overlap: bool):
@@ -519,11 +704,19 @@ class ARCGraph:
         if len(unfilled_pixels) > 0:
             new_node_id = self.generate_node_id(fill_color)
             if self.is_multicolor:
-                self.graph.add_node(new_node_id, nodes=list(unfilled_pixels),
-                                    color=[fill_color for j in unfilled_pixels], size=len(unfilled_pixels))
+                self.graph.add_node(
+                    new_node_id,
+                    nodes=list(unfilled_pixels),
+                    color=[fill_color for j in unfilled_pixels],
+                    size=len(unfilled_pixels),
+                )
             else:
-                self.graph.add_node(new_node_id, nodes=list(unfilled_pixels), color=fill_color,
-                                    size=len(unfilled_pixels))
+                self.graph.add_node(
+                    new_node_id,
+                    nodes=list(unfilled_pixels),
+                    color=fill_color,
+                    size=len(unfilled_pixels),
+                )
         return self
 
     def hollow_rectangle(self, node, fill_color):
@@ -541,14 +734,19 @@ class ARCGraph:
         self.graph.nodes[node]["nodes"] = new_subnodes
         if fill_color != self.image.background_color:
             new_node_id = self.generate_node_id(fill_color)
-            self.graph.add_node(new_node_id, nodes=list(non_border_pixels), color=fill_color,
-                                size=len(non_border_pixels))
+            self.graph.add_node(
+                new_node_id,
+                nodes=list(non_border_pixels),
+                color=fill_color,
+                size=len(non_border_pixels),
+            )
         return self
-    
 
     def truncate(self, color1, color2, grid_size, truncate_type, mirror):
         grid = self.graph_to_grid()
-        transformed_grid = truncate_grid_based(grid, color1, color2, grid_size, truncate_type, mirror)
+        transformed_grid = truncate_grid_based(
+            grid, color1, color2, grid_size, truncate_type, mirror
+        )
         self.update_graph_from_grid(transformed_grid)
         return self
 
@@ -557,18 +755,20 @@ class ARCGraph:
         transformed_grid = shift_grid_based(grid, color1)
         self.update_graph_from_grid(transformed_grid)
         return self
-    
+
     def recolor(self, recolor_type, color1, color2, shifting_direction):
         grid = self.graph_to_grid()
-        transformed_grid = recolor_grid_based(grid, recolor_type, color1, color2, shifting_direction)
+        transformed_grid = recolor_grid_based(
+            grid, recolor_type, color1, color2, shifting_direction
+        )
         self.update_graph_from_grid(transformed_grid)
         return self
 
-    def upscale_grid(self, factor, mirror, upscale_type, color,
-                     border_color, fill_color
-                     ):
+    def upscale_grid(self, factor, mirror, upscale_type, color, border_color, fill_color):
         grid = self.graph_to_grid()
-        transformed_grid = upscale_grid_based(grid, factor, mirror, upscale_type, color,border_color, fill_color)
+        transformed_grid = upscale_grid_based(
+            grid, factor, mirror, upscale_type, color, border_color, fill_color
+        )
         self.update_graph_from_grid(transformed_grid)
         return self
 
@@ -578,13 +778,17 @@ class ARCGraph:
         self.update_graph_from_grid(transformed_grid)
         return self
 
-
-    def mirror_grid(self, mirror_axis="diagonal", mirror_type="color", color1:int=0, color2:int=0):
+    def mirror_grid(
+        self,
+        mirror_axis="diagonal",
+        mirror_type="color",
+        color1: int = 0,
+        color2: int = 0,
+    ):
         grid = self.graph_to_grid()
         transformed_grid = mirror_grid_based(grid, mirror_axis, mirror_type, color1, color2)
         self.update_graph_from_grid(transformed_grid)
         return self
-
 
     def mirror(self, node, mirror_axis):
         if mirror_axis[1] is None and mirror_axis[0] is not None:
@@ -645,7 +849,7 @@ class ARCGraph:
             new_subnodes = []
             for subnode in self.graph.nodes[node]["nodes"]:
                 new_subnode = (subnode[0] - min_y, subnode[1] - max_x)
-                new_subnode = (- new_subnode[1], - new_subnode[0])
+                new_subnode = (-new_subnode[1], -new_subnode[0])
                 new_subnode = (new_subnode[0] + min_y, new_subnode[1] + max_x)
                 new_subnodes.append(new_subnode)
             if not self.check_collision(node, new_subnodes):
@@ -683,8 +887,12 @@ class ARCGraph:
             delta_x = subnode[1] - object_centroid[1]
             subnodes_coords.append((target_point[0] + delta_y, target_point[1] + delta_x))
         new_node_id = self.generate_node_id(object["color"])
-        self.graph.add_node(new_node_id, nodes=list(subnodes_coords), color=object["color"],
-                            size=len(list(subnodes_coords)))
+        self.graph.add_node(
+            new_node_id,
+            nodes=list(subnodes_coords),
+            color=object["color"],
+            size=len(list(subnodes_coords)),
+        )
         return self
 
     def remove_node(self, node):
@@ -738,16 +946,20 @@ class ARCGraph:
             return set()
         min_x = min([sub_node[1] for sub_node in sub_nodes])
         min_y = min([sub_node[0] for sub_node in sub_nodes])
-        return set([(y - min_y, x - min_x) for y, x in sub_nodes])
+        return {(y - min_y, x - min_x) for y, x in sub_nodes}
 
     def get_centroid(self, node):
         """
         get the centroid of a node
         """
-        center_y = (sum([n[0] for n in self.graph.nodes[node]["nodes"]]) + self.graph.nodes[node]["size"] // 2) // \
-                   self.graph.nodes[node]["size"]
-        center_x = (sum([n[1] for n in self.graph.nodes[node]["nodes"]]) + self.graph.nodes[node]["size"] // 2) // \
-                   self.graph.nodes[node]["size"]
+        center_y = (
+            sum([n[0] for n in self.graph.nodes[node]["nodes"]])
+            + self.graph.nodes[node]["size"] // 2
+        ) // self.graph.nodes[node]["size"]
+        center_x = (
+            sum([n[1] for n in self.graph.nodes[node]["nodes"]])
+            + self.graph.nodes[node]["size"] // 2
+        ) // self.graph.nodes[node]["size"]
         return (center_y, center_x)
 
     def get_centroid_from_pixels(self, pixels):
@@ -778,7 +990,9 @@ class ARCGraph:
         else:
             return (None, node2_centroid[1])
 
-    def get_point_from_relative_pos(self, filtered_point, relative_point, relative_pos: RelativePosition):
+    def get_point_from_relative_pos(
+        self, filtered_point, relative_point, relative_pos: RelativePosition
+    ):
         if relative_pos == RelativePosition.SOURCE:
             return filtered_point
         elif relative_pos == RelativePosition.TARGET:
@@ -790,7 +1004,13 @@ class ARCGraph:
 
     # ------------------------------------------ apply -----------------------------------
 
-    def apply(self, filters=None, filter_params=None, transformation=None, transformation_params=None):
+    def apply(
+        self,
+        filters=None,
+        filter_params=None,
+        transformation=None,
+        transformation_params=None,
+    ):
         """
         Perform a full operation on the abstracted graph.
         """
@@ -862,7 +1082,7 @@ class ARCGraph:
         Apply transformation to a list of nodes or the entire graph.
         """
         if not isinstance(nodes, list):
-            getattr(self, transformation[0])(nodes, **transformation_params) 
+            getattr(self, transformation[0])(nodes, **transformation_params)
         elif nodes is None:
             # Apply transformations that operate on the entire graph
             getattr(self, transformation[0])(**transformation_params)
@@ -880,44 +1100,71 @@ class ARCGraph:
         """
         return ARCGraph(self.graph.copy(), self.name, self.image, self.abstraction)
 
-    def beam(self, color1=0, color2=0, beam_type:str="color_inheritance"):
+    def beam(self, color1=0, color2=0, beam_type: str = "color_inheritance"):
         grid = self.graph_to_grid()
         transformed_grid = beam_grid_based(grid, color1, color2, beam_type)
         self.update_graph_from_grid(transformed_grid)
         return self
-    
-    def arbitrary_duplicate(self, mirror, duplicate_arbitrary, axis, mirror_grid, combine_pattern, concat_axis):
+
+    def arbitrary_duplicate(
+        self,
+        mirror,
+        duplicate_arbitrary,
+        axis,
+        mirror_grid,
+        combine_pattern,
+        concat_axis,
+    ):
         grid = self.graph_to_grid()
-        transformed_grid = arbitrary_duplicate_grid_based(grid, mirror, duplicate_arbitrary, axis, mirror_grid, combine_pattern, concat_axis)
+        transformed_grid = arbitrary_duplicate_grid_based(
+            grid,
+            mirror,
+            duplicate_arbitrary,
+            axis,
+            mirror_grid,
+            combine_pattern,
+            concat_axis,
+        )
         self.update_graph_from_grid(transformed_grid)
         return self
-    
+
     def rotate_duplicate(self, mirror, rotation_degrees):
         grid = self.graph_to_grid()
         transformed_grid = rotate_duplicate_grid_based(grid, mirror, rotation_degrees)
         self.update_graph_from_grid(transformed_grid)
         return self
 
-        
-
-    def duplicate(self, axis: str ='horizontal', duplicate: int=2, color1:int=0,
-                  mirror: bool=False,
-                  #mirror_grid: Optional[str] = None,
-                  concat_axis = "y",
-                  #combine_pattern: str = "grid1 + grid2",
-                  duplication_type: str="grid_based",
-                  #rotation_degrees: List[int]=None
-                  ):
+    def duplicate(
+        self,
+        axis: str = "horizontal",
+        duplicate: int = 2,
+        color1: int = 0,
+        mirror: bool = False,
+        # mirror_grid: Optional[str] = None,
+        concat_axis="y",
+        # combine_pattern: str = "grid1 + grid2",
+        duplication_type: str = "grid_based",
+        # rotation_degrees: List[int]=None
+    ):
         grid = self.graph_to_grid()
         if duplication_type == "pixel_based":
+
             def find_objects(grid, color1):
                 visited = set()
                 objects = []
                 rows = len(grid)
                 cols = len(grid[0]) if rows > 0 else 0
 
-                directions = [(-1, 0), (1, 0), (0, -1), (0, 1),
-                            (-1, -1), (-1, 1), (1, -1), (1, 1)]
+                directions = [
+                    (-1, 0),
+                    (1, 0),
+                    (0, -1),
+                    (0, 1),
+                    (-1, -1),
+                    (-1, 1),
+                    (1, -1),
+                    (1, 1),
+                ]
 
                 for i in range(rows):
                     for j in range(cols):
@@ -955,7 +1202,6 @@ class ARCGraph:
                 return list(replication_pixels)
 
             def crop_object(grid, obj_cells):
-
                 if not obj_cells:
                     return []
 
@@ -974,33 +1220,34 @@ class ARCGraph:
                 return cropped
 
             def replicate_object(cropped_obj, color):
-
                 replicated_obj = [[color if val != 0 else 0 for val in row] for row in cropped_obj]
                 return replicated_obj
+
             objects = find_objects(grid, color1)
             desired_grid = []
             obj = objects[0]
-            
+
             replication_pixels = find_replication_pixels(grid, obj)
             if not replication_pixels:
                 raise ValueError("No Replication pixels!")
             rp_rows = [rp[0] for rp in replication_pixels]
             rp_cols = [rp[1] for rp in replication_pixels]
 
-            if concat_axis=="xy":
+            if concat_axis == "xy":
                 if all(r == rp_rows[0] for r in rp_rows):
-                    arrangement = 'horizontal'
+                    arrangement = "horizontal"
                     replication_pixels.sort(key=lambda x: x[1])
                 elif all(c == rp_cols[0] for c in rp_cols):
-                    arrangement = 'vertical'
+                    arrangement = "vertical"
                     replication_pixels.sort(key=lambda x: x[0])
                 else:
-                    raise ValueError('Replication pixels are not arranged strictly horizontally or vertically.')
-            elif concat_axis == 'y':
+                    raise ValueError(
+                        "Replication pixels are not arranged strictly horizontally or vertically."
+                    )
+            elif concat_axis == "y":
                 arrangement = "vertical"
             elif concat_axis == "x":
                 arrangement = "horizontal"
-                
 
             cropped_obj = crop_object(grid, obj)
             obj_height = len(cropped_obj)
@@ -1014,12 +1261,12 @@ class ARCGraph:
                     replicated_obj = replicate_object(cropped_obj, color1)
                 replicated_objects.append(replicated_obj)
 
-            if arrangement == 'horizontal':
+            if arrangement == "horizontal":
                 desired_grid = [[] for _ in range(obj_height)]
                 for replica in replicated_objects:
                     for i in range(obj_height):
                         desired_grid[i].extend(replica[i])
-            elif arrangement == 'vertical':
+            elif arrangement == "vertical":
                 desired_grid = []
                 for replica in replicated_objects:
                     desired_grid.extend(replica)
@@ -1028,25 +1275,25 @@ class ARCGraph:
                 desired_grid.insert(0, zero_row)
             self.update_graph_from_grid(desired_grid)
             return self
-        
+
         if duplication_type == "sibling_pixel":
             grid = deepcopy(grid)
-            
+
             rows = len(grid)
             cols = len(grid[0]) if rows > 0 else 0
-            
+
             visited = [[False for _ in range(cols)] for _ in range(rows)]
             components = []
-            
+
             def bfs(start_r, start_c):
                 q = deque()
                 q.append((start_r, start_c))
                 visited[start_r][start_c] = True
                 component = [(start_r, start_c)]
-                
+
                 while q:
                     x, y = q.popleft()
-                    for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
+                    for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                         nx, ny = x + dx, y + dy
                         if 0 <= nx < rows and 0 <= ny < cols:
                             if grid[nx][ny] != 0 and not visited[nx][ny]:
@@ -1054,16 +1301,16 @@ class ARCGraph:
                                 q.append((nx, ny))
                                 component.append((nx, ny))
                 return component
-            
+
             for r in range(rows):
                 for c in range(cols):
                     if grid[r][c] != 0 and not visited[r][c]:
                         comp = bfs(r, c)
                         components.append(comp)
-            
+
             if len(components) != 2:
                 raise ValueError("Grid does not contain exactly one object and one single pixel.")
-            
+
             object_component = None
             single_pixel = None
             for comp in components:
@@ -1071,43 +1318,43 @@ class ARCGraph:
                     single_pixel = comp[0]
                 else:
                     object_component = comp
-            
+
             if object_component is None or single_pixel is None:
                 raise ValueError("Failed to identify object or single pixel.")
-            
+
             single_r, single_c = single_pixel
             single_color = grid[single_r][single_c]
-            
+
             matching_pixel = None
-            for (r, c) in object_component:
+            for r, c in object_component:
                 if grid[r][c] == single_color:
                     matching_pixel = (r, c)
                     break
-            
+
             if matching_pixel is None:
                 raise ValueError("No matching pixel found in the object.")
-            
+
             obj_r, obj_c = matching_pixel
             relative_positions = []
-            for (r, c) in object_component:
+            for r, c in object_component:
                 dx = r - obj_r
                 dy = c - obj_c
                 relative_positions.append((dx, dy, grid[r][c]))
-            
+
             single_new_r, single_new_c = single_pixel
-            
-            for (dx, dy, val) in relative_positions:
+
+            for dx, dy, val in relative_positions:
                 new_r = single_new_r + dx
                 new_c = single_new_c + dy
                 if 0 <= new_r < rows and 0 <= new_c < cols:
                     grid[new_r][new_c] = val
                 else:
                     pass
-            
+
             grid[single_new_r][single_new_c] = 0
             self.update_graph_from_grid(grid)
             return self
-        
+
         if duplication_type == "grid_based":
             total_rows = len(grid)
             start_index = (total_rows // 2) + (total_rows % 2)
@@ -1116,28 +1363,31 @@ class ARCGraph:
             transformed_grid = mirrored_bottom + bottom_half
             self.update_graph_from_grid(transformed_grid)
             return self
-                
+
         if duplication_type == "top_bottom_duplication":
+
             def mirror_grid(grid, axis=None):
-                if axis == 'horizontal':
+                if axis == "horizontal":
                     return grid[::-1]
-                elif axis == 'vertical':
+                elif axis == "vertical":
                     return [row[::-1] for row in grid]
-                elif axis == 'both':
+                elif axis == "both":
                     return [row[::-1] for row in grid[::-1]]
                 else:
                     return grid
+
             def hconcat(grid1, grid2):
                 return [row1 + row2 for row1, row2 in zip(grid1, grid2)]
-            MhO = mirror_grid(grid, axis='horizontal')
-            MvO = mirror_grid(grid, axis='vertical')
-            MvMhO = mirror_grid(grid, axis='both')
+
+            MhO = mirror_grid(grid, axis="horizontal")
+            MvO = mirror_grid(grid, axis="vertical")
+            MvMhO = mirror_grid(grid, axis="both")
             top = hconcat(MvMhO, MhO)
             bottom = hconcat(MvO, grid)
             transformed_grid = top + bottom
             self.update_graph_from_grid(transformed_grid)
             return self
-    
+
         if duplication_type == "object_based":
             color_counts = {}
             for row in grid:
@@ -1163,7 +1413,7 @@ class ARCGraph:
                         positions_with_most_common_color.add((i, j))
             total_rows = len(upscaled_grid)
             total_cols = len(upscaled_grid[0]) if total_rows > 0 else 0
-            all_positions = set((i, j) for i in range(total_rows) for j in range(total_cols))
+            all_positions = {(i, j) for i in range(total_rows) for j in range(total_cols)}
             positions_to_zero = all_positions - positions_with_most_common_color
             extended_horizontally = []
             for i in range(len(horizontally_concatenated)):
@@ -1189,51 +1439,52 @@ class ARCGraph:
                 unique_colors = count_unique_colors_except_zero(grid)
             else:
                 unique_colors = len(grid)
-        
+
             if concat_axis == "x":
                 duplicated_grid = []
                 for row in grid:
                     new_row = row * unique_colors
                     duplicated_grid.append(new_row)
-            
+
             elif concat_axis == "y":
                 duplicated_grid = grid * unique_colors
-            
+
             elif concat_axis == "xy":
                 duplicated_grid_horizontal = []
                 for row in grid:
                     new_row = row * unique_colors
                     duplicated_grid_horizontal.append(new_row)
                 duplicated_grid = duplicated_grid_horizontal * unique_colors
-            
+
             else:
                 raise ValueError("Invalid value for concat_axis. Use 'x', 'y', or 'xy'.")
-    
+
             self.update_graph_from_grid(duplicated_grid)
             return self
         if duplicate == 2:
             grid = self.graph_to_grid()
             if mirror and axis == "vertical":
                 vmirrored_grid = [row[::-1] for row in grid]
-                transformed_grid = [original_row + mirrored_row for original_row, mirrored_row in zip(grid, vmirrored_grid)]
-            
+                transformed_grid = [
+                    original_row + mirrored_row
+                    for original_row, mirrored_row in zip(grid, vmirrored_grid)
+                ]
+
             elif mirror and axis == "horizontal":
                 hmirrored_grid = grid[::-1]
                 transformed_grid = grid + hmirrored_grid
-            
+
             elif not mirror and axis == "vertical":
                 transformed_grid = [row + row for row in grid]
-            
+
             elif not mirror and axis == "horizontal":
                 transformed_grid = grid + grid
-            
+
             else:
                 raise ValueError("Invalid combination of mirror and axis parameters.")
-            
+
             self.update_graph_from_grid(transformed_grid)
             return self
-
-
 
         elif duplicate == 4:
             original_nodes = list(self.graph.nodes(data=True))
@@ -1242,15 +1493,15 @@ class ARCGraph:
             self.width *= 2
             self.height *= 2
             transforms = [
-                ('original', 0, 0),
-                ('h_mirror', original_width, 0),
-                ('v_mirror', 0, original_height),
-                ('hv_mirror', original_width, original_height),
+                ("original", 0, 0),
+                ("h_mirror", original_width, 0),
+                ("v_mirror", 0, original_height),
+                ("hv_mirror", original_width, original_height),
             ]
 
             max_ids = {}
             for node, data in original_nodes:
-                node_colors = data['color']
+                node_colors = data["color"]
                 if isinstance(node_colors, list):
                     colors = node_colors
                 else:
@@ -1262,9 +1513,9 @@ class ARCGraph:
                         max_ids[color] = max(max_ids[color], node[1])
 
             for transform_name, shift_x, shift_y in transforms:
-                if transform_name == 'original':
+                if transform_name == "original":
                     for node, data in original_nodes:
-                        node_colors = data['color']
+                        node_colors = data["color"]
                         if isinstance(node_colors, list):
                             color = node_colors[0]
                         else:
@@ -1273,13 +1524,17 @@ class ARCGraph:
                             max_ids[color] = -1
                         max_ids[color] += 1
                         new_node_id = (color, max_ids[color])
-                        subnodes = data.get('nodes', [node])
+                        subnodes = data.get("nodes", [node])
                         new_subnodes = [(y + shift_y, x + shift_x) for y, x in subnodes]
-                        self.graph.add_node(new_node_id, nodes=new_subnodes, color=data['color'],
-                                            size=data.get('size', len(new_subnodes)))
-                elif transform_name == 'h_mirror':
+                        self.graph.add_node(
+                            new_node_id,
+                            nodes=new_subnodes,
+                            color=data["color"],
+                            size=data.get("size", len(new_subnodes)),
+                        )
+                elif transform_name == "h_mirror":
                     for node, data in original_nodes:
-                        node_colors = data['color']
+                        node_colors = data["color"]
                         if isinstance(node_colors, list):
                             color = node_colors[0]
                         else:
@@ -1288,17 +1543,21 @@ class ARCGraph:
                             max_ids[color] = -1
                         max_ids[color] += 1
                         new_node_id = (color, max_ids[color])
-                        subnodes = data.get('nodes', [node])
+                        subnodes = data.get("nodes", [node])
                         new_subnodes = []
                         for y, x in subnodes:
                             mirrored_x = (original_width - 1) - x
                             new_subnodes.append((y, mirrored_x))
                         new_subnodes = [(y + shift_y, x + shift_x) for y, x in new_subnodes]
-                        self.graph.add_node(new_node_id, nodes=new_subnodes, color=data['color'],
-                                            size=data.get('size', len(new_subnodes)))
-                elif transform_name == 'v_mirror':
+                        self.graph.add_node(
+                            new_node_id,
+                            nodes=new_subnodes,
+                            color=data["color"],
+                            size=data.get("size", len(new_subnodes)),
+                        )
+                elif transform_name == "v_mirror":
                     for node, data in original_nodes:
-                        node_colors = data['color']
+                        node_colors = data["color"]
                         if isinstance(node_colors, list):
                             color = node_colors[0]
                         else:
@@ -1307,17 +1566,21 @@ class ARCGraph:
                             max_ids[color] = -1
                         max_ids[color] += 1
                         new_node_id = (color, max_ids[color])
-                        subnodes = data.get('nodes', [node])
+                        subnodes = data.get("nodes", [node])
                         new_subnodes = []
                         for y, x in subnodes:
                             mirrored_y = (original_height - 1) - y
                             new_subnodes.append((mirrored_y, x))
                         new_subnodes = [(y + shift_y, x + shift_x) for y, x in new_subnodes]
-                        self.graph.add_node(new_node_id, nodes=new_subnodes, color=data['color'],
-                                            size=data.get('size', len(new_subnodes)))
-                elif transform_name == 'hv_mirror':
+                        self.graph.add_node(
+                            new_node_id,
+                            nodes=new_subnodes,
+                            color=data["color"],
+                            size=data.get("size", len(new_subnodes)),
+                        )
+                elif transform_name == "hv_mirror":
                     for node, data in original_nodes:
-                        node_colors = data['color']
+                        node_colors = data["color"]
                         if isinstance(node_colors, list):
                             color = node_colors[0]
                         else:
@@ -1326,20 +1589,25 @@ class ARCGraph:
                             max_ids[color] = -1
                         max_ids[color] += 1
                         new_node_id = (color, max_ids[color])
-                        subnodes = data.get('nodes', [node])
+                        subnodes = data.get("nodes", [node])
                         new_subnodes = []
                         for y, x in subnodes:
                             mirrored_y = (original_height - 1) - y  # Flip y
                             mirrored_x = (original_width - 1) - x  # Flip x
                             new_subnodes.append((mirrored_y, mirrored_x))
                         new_subnodes = [(y + shift_y, x + shift_x) for y, x in new_subnodes]
-                        self.graph.add_node(new_node_id, nodes=new_subnodes, color=data['color'],
-                                            size=data.get('size', len(new_subnodes)))
+                        self.graph.add_node(
+                            new_node_id,
+                            nodes=new_subnodes,
+                            color=data["color"],
+                            size=data.get("size", len(new_subnodes)),
+                        )
         else:
-            raise ValueError(f"Unsupported duplicate value. Supported values are 2 and 4. You provided {duplicate}")
+            raise ValueError(
+                f"Unsupported duplicate value. Supported values are 2 and 4. You provided {duplicate}"
+            )
 
         return self
-
 
     def generate_node_id(self, color):
         """
@@ -1348,12 +1616,11 @@ class ARCGraph:
         """
         if isinstance(color, list):  # multi-color cases
             color = color[0]
-        max_id = 0 
+        max_id = 0
         for node in self.graph.nodes():
             if node[0] == color:
                 max_id = max(max_id, node[1])
         return (color, max_id + 1)
-    
 
     def undo_abstraction(self, adjust_to_bounding_box):
         if adjust_to_bounding_box:
@@ -1361,16 +1628,16 @@ class ARCGraph:
         else:
             return self.undo_abstraction2()
 
-
     def undo_abstraction1(self):
         """
         Undo the abstraction to get the corresponding 2D grid.
         Return it as an ARCGraph object with adjusted size.
         """
         from image import Image
+
         nodes = []
         for component, data in self.graph.nodes(data=True):
-            nodes_list = data.get('nodes', [component])
+            nodes_list = data.get("nodes", [component])
             nodes.extend(nodes_list)
 
         if not nodes:
@@ -1392,8 +1659,8 @@ class ARCGraph:
 
         # Adjust node coordinates and set colors
         for component, data in self.graph.nodes(data=True):
-            nodes_list = data.get('nodes', [component])
-            color = data['color']
+            nodes_list = data.get("nodes", [component])
+            color = data["color"]
             if not isinstance(color, list):
                 color = [color] * len(nodes_list)
             for node, c in zip(nodes_list, color):
@@ -1407,12 +1674,12 @@ class ARCGraph:
             width=width,
             height=height,
             graph=reconstructed_graph,
-            name=self.image.name + "_reconstructed"
+            name=self.image.name + "_reconstructed",
         )
         new_image.background_color = self.image.background_color
 
         return ARCGraph(reconstructed_graph, self.name + "_reconstructed", new_image, None)
-    
+
     def undo_abstraction2(self):
         """
         undo the abstraction to get the corresponding 2D grid
@@ -1440,7 +1707,6 @@ class ARCGraph:
 
         return ARCGraph(reconstructed_graph, self.name + "_reconstructed", self.image, None)
 
-
     def update_abstracted_graph(self, affected_nodes):
         """
         update the abstracted graphs so that they remain consistent after transformation
@@ -1460,7 +1726,9 @@ class ARCGraph:
 
         for node1, node2 in combinations(self.graph.nodes, 2):
             if node1 == node2 or (
-                    self.graph.has_edge(node1, node2) and self.graph.edges[node1, node2]["direction"] == "overlapping"):
+                self.graph.has_edge(node1, node2)
+                and self.graph.edges[node1, node2]["direction"] == "overlapping"
+            ):
                 continue
             else:
                 nodes_1 = self.graph.nodes[node1]["nodes"]
@@ -1471,8 +1739,12 @@ class ARCGraph:
                             for column_index in range(min(n1[1], n2[1]) + 1, max(n1[1], n2[1])):
                                 # try:
                                 pixel_assignment = pixel_assignments.get((n1[0], column_index), [])
-                                if len(pixel_assignment) == 0 or (len(pixel_assignment) == 1 and (
-                                        pixel_assignment[0] == node1 or pixel_assignment[0] == node2)):
+                                if len(pixel_assignment) == 0 or (
+                                    len(pixel_assignment) == 1
+                                    and (
+                                        pixel_assignment[0] == node1 or pixel_assignment[0] == node2
+                                    )
+                                ):
                                     continue
                                 break
                             else:
@@ -1484,8 +1756,12 @@ class ARCGraph:
                         elif n1[1] == n2[1]:  # two nodes on the same column:
                             for row_index in range(min(n1[0], n2[0]) + 1, max(n1[0], n2[0])):
                                 pixel_assignment = pixel_assignments.get((row_index, n1[1]), [])
-                                if len(pixel_assignment) == 0 or (len(pixel_assignment) == 1 and (
-                                        pixel_assignment[0] == node1 or pixel_assignment[0] == node2)):
+                                if len(pixel_assignment) == 0 or (
+                                    len(pixel_assignment) == 1
+                                    and (
+                                        pixel_assignment[0] == node1 or pixel_assignment[0] == node2
+                                    )
+                                ):
                                     continue
                                 break
                             else:

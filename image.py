@@ -3,16 +3,28 @@ from ARCGraph import *
 
 
 class Image:
-    abstractions = ["na", "nbccg", "ccgbr", "ccgbr2", "ccg", "mcccg", "lrg", "nbvcg", "nbhcg"]
-    abstraction_ops = {"nbccg": "get_non_black_components_graph",
-                       "ccgbr": "get_connected_components_graph_background_removed",
-                       "ccgbr2": "get_connected_components_graph_background_removed_2",
-                       "ccg": "get_connected_components_graph",
-                       "mcccg": "get_multicolor_connected_components_graph",
-                       "na": "get_no_abstraction_graph",
-                       "nbvcg": "get_non_background_vertical_connected_components_graph",
-                       "nbhcg": "get_non_background_horizontal_connected_components_graph",
-                       "lrg": "get_largest_rectangle_graph"}
+    abstractions = [
+        "na",
+        "nbccg",
+        "ccgbr",
+        "ccgbr2",
+        "ccg",
+        "mcccg",
+        "lrg",
+        "nbvcg",
+        "nbhcg",
+    ]
+    abstraction_ops = {
+        "nbccg": "get_non_black_components_graph",
+        "ccgbr": "get_connected_components_graph_background_removed",
+        "ccgbr2": "get_connected_components_graph_background_removed_2",
+        "ccg": "get_connected_components_graph",
+        "mcccg": "get_multicolor_connected_components_graph",
+        "na": "get_no_abstraction_graph",
+        "nbvcg": "get_non_background_vertical_connected_components_graph",
+        "nbhcg": "get_non_background_horizontal_connected_components_graph",
+        "lrg": "get_largest_rectangle_graph",
+    }
     multicolor_abstractions = ["mcccg", "na"]
 
     def __init__(self, task, grid=None, width=None, height=None, graph=None, name="image"):
@@ -52,7 +64,9 @@ class Image:
             for node, data in graph.nodes(data=True):
                 colors.append(data["color"])
             if 0 not in colors:
-                self.background_color = max(set(colors), key=colors.count)  # simple way to retrieve most common item
+                self.background_color = max(
+                    set(colors), key=colors.count
+                )  # simple way to retrieve most common item
             self.colors_included = set(colors)
             if len(colors) != 0:
                 self.most_common_color = max(set(colors), key=colors.count)
@@ -70,13 +84,20 @@ class Image:
                     colors.append(color)
             self.arc_graph = ARCGraph(self.graph, self.name, self)
             if 0 not in colors:
-                self.background_color = max(set(colors), key=colors.count)  # simple way to retrieve most common item
+                self.background_color = max(
+                    set(colors), key=colors.count
+                )  # simple way to retrieve most common item
             self.colors_included = set(colors)
             if len(colors) != 0:
                 self.most_common_color = max(set(colors), key=colors.count)
                 self.least_common_color = min(set(colors), key=colors.count)
 
-        self.corners = {(0, 0), (0, self.width - 1), (self.height - 1, 0), (self.height - 1, self.width - 1)}
+        self.corners = {
+            (0, 0),
+            (0, self.width - 1),
+            (self.height - 1, 0),
+            (self.height - 1, self.width - 1),
+        }
 
     def copy(self):
         """
@@ -87,7 +108,7 @@ class Image:
     #  --------------------------------------abstractions-----------------------------------
     def get_connected_components_graph(self, graph=None):
         """
-        return an abstracted graph where a node is defined as: 
+        return an abstracted graph where a node is defined as:
         a group of adjacent pixels of the same color in the original graph
         """
         if not graph:
@@ -97,12 +118,18 @@ class Image:
 
         # for color in self.colors_included:
         for color in range(10):
-            color_nodes = (node for node, data in graph.nodes(data=True) if data.get("color") == color)
+            color_nodes = (
+                node for node, data in graph.nodes(data=True) if data.get("color") == color
+            )
             color_subgraph = graph.subgraph(color_nodes)
             color_connected_components = connected_components(color_subgraph)
             for i, component in enumerate(color_connected_components):
-                color_connected_components_graph.add_node((color, i), nodes=list(component), color=color,
-                                                          size=len(list(component)))
+                color_connected_components_graph.add_node(
+                    (color, i),
+                    nodes=list(component),
+                    color=color,
+                    size=len(list(component)),
+                )
 
         for node_1, node_2 in combinations(color_connected_components_graph.nodes, 2):
             nodes_1 = color_connected_components_graph.nodes[node_1]["nodes"]
@@ -114,14 +141,18 @@ class Image:
                             if graph.nodes[n1[0], column_index]["color"] != self.background_color:
                                 break
                         else:
-                            color_connected_components_graph.add_edge(node_1, node_2, direction="horizontal")
+                            color_connected_components_graph.add_edge(
+                                node_1, node_2, direction="horizontal"
+                            )
                             break
                     elif n1[1] == n2[1]:  # two nodes on the same column:
                         for row_index in range(min(n1[0], n2[0]) + 1, max(n1[0], n2[0])):
                             if graph.nodes[row_index, n1[1]]["color"] != self.background_color:
                                 break
                         else:
-                            color_connected_components_graph.add_edge(node_1, node_2, direction="vertical")
+                            color_connected_components_graph.add_edge(
+                                node_1, node_2, direction="vertical"
+                            )
                             break
                 else:
                     continue
@@ -131,7 +162,7 @@ class Image:
 
     def get_connected_components_graph_background_removed(self, graph=None):
         """
-        return an abstracted graph where a node is defined as: 
+        return an abstracted graph where a node is defined as:
         a group of adjacent pixels of the same color in the original graph.
         remove nodes identified as background.
         background is defined as a node that includes a corner and has the most common color
@@ -141,16 +172,30 @@ class Image:
         ccgbr = nx.Graph()
 
         for color in range(10):
-            color_nodes = (node for node, data in graph.nodes(data=True) if data.get("color") == color)
+            color_nodes = (
+                node for node, data in graph.nodes(data=True) if data.get("color") == color
+            )
             color_subgraph = graph.subgraph(color_nodes)
             color_connected_components = connected_components(color_subgraph)
             if color != self.background_color:
                 for i, component in enumerate(color_connected_components):
-                    ccgbr.add_node((color, i), nodes=list(component), color=color, size=len(list(component)))
+                    ccgbr.add_node(
+                        (color, i),
+                        nodes=list(component),
+                        color=color,
+                        size=len(list(component)),
+                    )
             else:
                 for i, component in enumerate(color_connected_components):
-                    if len(set(component) & self.corners) == 0:  # background color + contains a corner
-                        ccgbr.add_node((color, i), nodes=list(component), color=color, size=len(list(component)))
+                    if (
+                        len(set(component) & self.corners) == 0
+                    ):  # background color + contains a corner
+                        ccgbr.add_node(
+                            (color, i),
+                            nodes=list(component),
+                            color=color,
+                            size=len(list(component)),
+                        )
 
         for node_1, node_2 in combinations(ccgbr.nodes, 2):
             nodes_1 = ccgbr.nodes[node_1]["nodes"]
@@ -179,7 +224,7 @@ class Image:
 
     def get_connected_components_graph_background_removed_2(self, graph=None):
         """
-        return an abstracted graph where a node is defined as: 
+        return an abstracted graph where a node is defined as:
         a group of adjacent pixels of the same color in the original graph.
         remove nodes identified as background.
         background is defined as a node that includes a corner or an edge node and has the most common color
@@ -190,21 +235,38 @@ class Image:
         ccgbr2 = nx.Graph()
 
         for color in range(10):
-            color_nodes = (node for node, data in graph.nodes(data=True) if data.get("color") == color)
+            color_nodes = (
+                node for node, data in graph.nodes(data=True) if data.get("color") == color
+            )
             color_subgraph = graph.subgraph(color_nodes)
             color_connected_components = connected_components(color_subgraph)
 
             for i, component in enumerate(color_connected_components):
                 if color != self.background_color:
-                    ccgbr2.add_node((color, i), nodes=list(component), color=color, size=len(list(component)))
+                    ccgbr2.add_node(
+                        (color, i),
+                        nodes=list(component),
+                        color=color,
+                        size=len(list(component)),
+                    )
                 else:
                     component = list(component)
                     for node in component:
                         # if the node touches any edge of image it is not included
-                        if node[0] == 0 or node[0] == self.height - 1 or node[1] == 0 or node[1] == self.width - 1:
+                        if (
+                            node[0] == 0
+                            or node[0] == self.height - 1
+                            or node[1] == 0
+                            or node[1] == self.width - 1
+                        ):
                             break
                     else:
-                        ccgbr2.add_node((color, i), nodes=component, color=color, size=len(component))
+                        ccgbr2.add_node(
+                            (color, i),
+                            nodes=component,
+                            color=color,
+                            size=len(component),
+                        )
 
         for node_1, node_2 in combinations(ccgbr2.nodes, 2):
             nodes_1 = ccgbr2.nodes[node_1]["nodes"]
@@ -233,7 +295,7 @@ class Image:
 
     def get_non_background_vertical_connected_components_graph(self, graph=None):
         """
-        return an abstracted graph where a node is defined as: 
+        return an abstracted graph where a node is defined as:
         a group of vertically adjacent pixels of the same color in the original graph, excluding background color.
         """
         if not graph:
@@ -246,15 +308,24 @@ class Image:
             if color == self.background_color:
                 continue
             for column in range(self.width):
-                color_nodes = (node for node, data in graph.nodes(data=True) if
-                               node[1] == column and data.get("color") == color)
+                color_nodes = (
+                    node
+                    for node, data in graph.nodes(data=True)
+                    if node[1] == column and data.get("color") == color
+                )
                 color_subgraph = graph.subgraph(color_nodes)
                 color_connected_components.extend(list(connected_components(color_subgraph)))
             for i, component in enumerate(color_connected_components):
-                non_background_vertical_connected_components_graph.add_node((color, i), nodes=list(component),
-                                                                            color=color, size=len(list(component)))
+                non_background_vertical_connected_components_graph.add_node(
+                    (color, i),
+                    nodes=list(component),
+                    color=color,
+                    size=len(list(component)),
+                )
 
-        for node_1, node_2 in combinations(non_background_vertical_connected_components_graph.nodes, 2):
+        for node_1, node_2 in combinations(
+            non_background_vertical_connected_components_graph.nodes, 2
+        ):
             nodes_1 = non_background_vertical_connected_components_graph.nodes[node_1]["nodes"]
             nodes_2 = non_background_vertical_connected_components_graph.nodes[node_2]["nodes"]
             for n1 in nodes_1:
@@ -264,26 +335,30 @@ class Image:
                             if graph.nodes[n1[0], column_index]["color"] != self.background_color:
                                 break
                         else:
-                            non_background_vertical_connected_components_graph.add_edge(node_1, node_2,
-                                                                                        direction="horizontal")
+                            non_background_vertical_connected_components_graph.add_edge(
+                                node_1, node_2, direction="horizontal"
+                            )
                             break
                     elif n1[1] == n2[1]:  # two nodes on the same column:
                         for row_index in range(min(n1[0], n2[0]) + 1, max(n1[0], n2[0])):
                             if graph.nodes[row_index, n1[1]]["color"] != self.background_color:
                                 break
                         else:
-                            non_background_vertical_connected_components_graph.add_edge(node_1, node_2,
-                                                                                        direction="vertical")
+                            non_background_vertical_connected_components_graph.add_edge(
+                                node_1, node_2, direction="vertical"
+                            )
                             break
                 else:
                     continue
                 break
 
-        return ARCGraph(non_background_vertical_connected_components_graph, self.name, self, "nbvcg")
+        return ARCGraph(
+            non_background_vertical_connected_components_graph, self.name, self, "nbvcg"
+        )
 
     def get_non_background_horizontal_connected_components_graph(self, graph=None):
         """
-        return an abstracted graph where a node is defined as: 
+        return an abstracted graph where a node is defined as:
         a group of horizontally adjacent pixels of the same color in the original graph, excluding background color.
         """
         if not graph:
@@ -297,15 +372,24 @@ class Image:
             if color == self.background_color:
                 continue
             for row in range(self.height):
-                color_nodes = (node for node, data in graph.nodes(data=True) if
-                               node[0] == row and data.get("color") == color)
+                color_nodes = (
+                    node
+                    for node, data in graph.nodes(data=True)
+                    if node[0] == row and data.get("color") == color
+                )
                 color_subgraph = graph.subgraph(color_nodes)
                 color_connected_components.extend(list(connected_components(color_subgraph)))
             for i, component in enumerate(color_connected_components):
-                non_background_horizontal_connected_components_graph.add_node((color, i), nodes=list(component),
-                                                                              color=color, size=len(list(component)))
+                non_background_horizontal_connected_components_graph.add_node(
+                    (color, i),
+                    nodes=list(component),
+                    color=color,
+                    size=len(list(component)),
+                )
 
-        for node_1, node_2 in combinations(non_background_horizontal_connected_components_graph.nodes, 2):
+        for node_1, node_2 in combinations(
+            non_background_horizontal_connected_components_graph.nodes, 2
+        ):
             nodes_1 = non_background_horizontal_connected_components_graph.nodes[node_1]["nodes"]
             nodes_2 = non_background_horizontal_connected_components_graph.nodes[node_2]["nodes"]
             for n1 in nodes_1:
@@ -315,25 +399,32 @@ class Image:
                             if graph.nodes[n1[0], column_index]["color"] != self.background_color:
                                 break
                         else:
-                            non_background_horizontal_connected_components_graph.add_edge(node_1, node_2,
-                                                                                          direction="horizontal")
+                            non_background_horizontal_connected_components_graph.add_edge(
+                                node_1, node_2, direction="horizontal"
+                            )
                             break
                     elif n1[1] == n2[1]:  # two nodes on the same column:
                         for row_index in range(min(n1[0], n2[0]) + 1, max(n1[0], n2[0])):
                             if graph.nodes[row_index, n1[1]]["color"] != self.background_color:
                                 break
                         else:
-                            non_background_horizontal_connected_components_graph.add_edge(node_1, node_2,
-                                                                                          direction="vertical")
+                            non_background_horizontal_connected_components_graph.add_edge(
+                                node_1, node_2, direction="vertical"
+                            )
                             break
                 else:
                     continue
                 break
-        return ARCGraph(non_background_horizontal_connected_components_graph, self.name, self, "nbhcg")
+        return ARCGraph(
+            non_background_horizontal_connected_components_graph,
+            self.name,
+            self,
+            "nbhcg",
+        )
 
     def get_non_black_components_graph(self, graph=None):
         """
-        return an abstracted graph where a node is defined as: 
+        return an abstracted graph where a node is defined as:
         a group of adjacent pixels of the same color in the original graph, excluding background color.
         """
         if not graph:
@@ -345,12 +436,18 @@ class Image:
         for color in range(10):
             if color == 0:
                 continue
-            color_nodes = (node for node, data in graph.nodes(data=True) if data.get("color") == color)
+            color_nodes = (
+                node for node, data in graph.nodes(data=True) if data.get("color") == color
+            )
             color_subgraph = graph.subgraph(color_nodes)
             color_connected_components = connected_components(color_subgraph)
             for i, component in enumerate(color_connected_components):
-                non_black_components_graph.add_node((color, i), nodes=list(component), color=color,
-                                                    size=len(list(component)))
+                non_black_components_graph.add_node(
+                    (color, i),
+                    nodes=list(component),
+                    color=color,
+                    size=len(list(component)),
+                )
 
         for node_1, node_2 in combinations(non_black_components_graph.nodes, 2):
             nodes_1 = non_black_components_graph.nodes[node_1]["nodes"]
@@ -362,14 +459,18 @@ class Image:
                             if graph.nodes[n1[0], column_index]["color"] != 0:
                                 break
                         else:
-                            non_black_components_graph.add_edge(node_1, node_2, direction="horizontal")
+                            non_black_components_graph.add_edge(
+                                node_1, node_2, direction="horizontal"
+                            )
                             break
                     elif n1[1] == n2[1]:  # two nodes on the same column:
                         for row_index in range(min(n1[0], n2[0]) + 1, max(n1[0], n2[0])):
                             if graph.nodes[row_index, n1[1]]["color"] != 0:
                                 break
                         else:
-                            non_black_components_graph.add_edge(node_1, node_2, direction="vertical")
+                            non_black_components_graph.add_edge(
+                                node_1, node_2, direction="vertical"
+                            )
                             break
                 else:
                     continue
@@ -404,7 +505,9 @@ class Image:
         for color in range(10):
             if color == 0:
                 continue
-            color_nodes = (node for node, data in graph.nodes(data=True) if data.get("color") == color)
+            color_nodes = (
+                node for node, data in graph.nodes(data=True) if data.get("color") == color
+            )
             color_subgraph = graph.subgraph(color_nodes)
             subgraph_nodes = set(color_subgraph.nodes())
             i = 0
@@ -459,7 +562,9 @@ class Image:
             graph = self.graph
         multicolor_connected_components_graph = nx.Graph()
 
-        non_background_nodes = [node for node, data in graph.nodes(data=True) if data["color"] != self.background_color]
+        non_background_nodes = [
+            node for node, data in graph.nodes(data=True) if data["color"] != self.background_color
+        ]
         color_subgraph = graph.subgraph(non_background_nodes)
         multicolor_connected_components = connected_components(color_subgraph)
 
@@ -469,8 +574,12 @@ class Image:
             for node in component:
                 sub_nodes.append(node)
                 sub_nodes_color.append(graph.nodes[node]["color"])
-            multicolor_connected_components_graph.add_node((len(sub_nodes), i), nodes=sub_nodes, color=sub_nodes_color,
-                                                           size=len(sub_nodes))
+            multicolor_connected_components_graph.add_node(
+                (len(sub_nodes), i),
+                nodes=sub_nodes,
+                color=sub_nodes_color,
+                size=len(sub_nodes),
+            )
         # add edges between the abstracted nodes
         for node_1, node_2 in combinations(multicolor_connected_components_graph.nodes, 2):
             nodes_1 = multicolor_connected_components_graph.nodes[node_1]["nodes"]
@@ -482,14 +591,18 @@ class Image:
                             if graph.nodes[n1[0], column_index]["color"] != self.background_color:
                                 break
                         else:
-                            multicolor_connected_components_graph.add_edge(node_1, node_2, direction="horizontal")
+                            multicolor_connected_components_graph.add_edge(
+                                node_1, node_2, direction="horizontal"
+                            )
                             break
                     elif n1[1] == n2[1]:  # two nodes on the same column:
                         for row_index in range(min(n1[0], n2[0]) + 1, max(n1[0], n2[0])):
                             if graph.nodes[row_index, n1[1]]["color"] != self.background_color:
                                 break
                         else:
-                            multicolor_connected_components_graph.add_edge(node_1, node_2, direction="vertical")
+                            multicolor_connected_components_graph.add_edge(
+                                node_1, node_2, direction="vertical"
+                            )
                             break
                 else:
                     continue
@@ -517,7 +630,4 @@ class Image:
 
     # undo abstraction
     def undo_abstraction(self, arc_graph, adjust_to_bounding_box=True):
-        return arc_graph.undo_abstraction(
-            adjust_to_bounding_box=adjust_to_bounding_box
-            )
-
+        return arc_graph.undo_abstraction(adjust_to_bounding_box=adjust_to_bounding_box)
