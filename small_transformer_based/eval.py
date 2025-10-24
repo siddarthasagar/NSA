@@ -28,9 +28,20 @@ if torch.cuda.device_count() >= 1:
     print(f"Using {torch.cuda.device_count()} GPUs")
     model = nn.DataParallel(model)
 
+# Device selection: CUDA > MPS (Apple Silicon) > CPU
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+    print("Using CUDA GPU for evaluation")
+elif torch.backends.mps.is_available():
+    device = torch.device("mps")
+    print("Using MPS (Metal) GPU for evaluation on Apple Silicon")
+else:
+    device = torch.device("cpu")
+    print("Using CPU for evaluation")
+
 # Load the model checkpoint (adjust the path as needed)
 print("##### LOADING THE MODEL... #####")
-checkpoint = torch.load("small_transformer_based/results/25.3M/checkpoint_epoch0_iter2.pth")
+checkpoint = torch.load("small_transformer_based/results/25.3M/checkpoint_epoch0_iter2.pth", map_location=device)
 
 # Extract the model's state_dict
 state_dict = checkpoint['model_state_dict']
@@ -41,8 +52,7 @@ print("#####... MODEL LOADED #####")
 
 model.eval()
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
 
-evaluate_true(model, tokenizer, "cuda", tta=False)
+evaluate_true(model, tokenizer, device, tta=False)

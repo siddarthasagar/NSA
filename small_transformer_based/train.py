@@ -493,14 +493,41 @@ def train(model, train_loader, val_loader, train_eval_loader, optimizer, schedul
     for batch_idx, (input_ids, output_ids) in enumerate(progress_bar):
         input_ids = input_ids.to(device)
         output_ids = output_ids.to(device)
-        output_ids = output_ids[output_ids != tokenizer.vocab["<BOS>"]]
-        output_ids = output_ids[output_ids != tokenizer.vocab["<EOS>"]]
         optimizer.zero_grad()
         attention_mask = (input_ids != tokenizer.vocab["<PAD>"]).to(device)
         logits = model(input_ids, attention_mask=attention_mask)
-        logits = logits.view(-1, logits.size(-1))
-        targets = output_ids.view(-1)
-        loss = nn.CrossEntropyLoss(ignore_index=tokenizer.vocab["<PAD>"])(logits, targets)
+        # logits shape: [batch, num_cls_tokens, vocab]
+        # We must align targets to exactly num_cls_tokens per sample.
+        num_cls_tokens = getattr(model, 'module', model).num_cls_tokens if hasattr(model, 'module') else model.num_cls_tokens
+        pad_id = tokenizer.vocab["<PAD>"]
+        bos_id = tokenizer.vocab["<BOS>"]
+        eos_id = tokenizer.vocab["<EOS>"]
+
+        # Build targets of shape [batch, num_cls_tokens]
+        targets_batch = []
+        for row in output_ids:  # row shape: [seq_len]
+            # Remove BOS tokens
+            row_wo_bos = row[row != bos_id]
+            # Stop at EOS if present
+            eos_positions = (row_wo_bos == eos_id).nonzero(as_tuple=True)[0]
+            if eos_positions.numel() > 0:
+                row_wo_bos = row_wo_bos[:eos_positions[0]]
+            # Remove PADs
+            row_clean = row_wo_bos[row_wo_bos != pad_id]
+            # Take first K label tokens; pad if fewer than K
+            k = num_cls_tokens
+            if row_clean.numel() >= k:
+                take = row_clean[:k]
+            else:
+                pad_needed = k - row_clean.numel()
+                take = torch.cat([row_clean, torch.full((pad_needed,), pad_id, dtype=row_clean.dtype, device=row_clean.device)])
+            targets_batch.append(take)
+        targets = torch.stack(targets_batch, dim=0)  # [batch, num_cls_tokens]
+
+        # Compute loss
+        logits = logits.view(-1, logits.size(-1))                 # [(batch*num_cls_tokens), vocab]
+        targets = targets.view(-1)                                 # [(batch*num_cls_tokens)]
+        loss = nn.CrossEntropyLoss(ignore_index=pad_id)(logits, targets)
         progress_bar.set_postfix(loss=loss.item())
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
@@ -525,7 +552,17 @@ def train(model, train_loader, val_loader, train_eval_loader, optimizer, schedul
 
 # Main Function
 def main(data_path, epochs=1, batch_size=32, save_iterations=100):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Device selection: CUDA > MPS (Apple Silicon) > CPU
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print("Using CUDA GPU acceleration")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+        print("Using MPS (Metal) GPU acceleration on Apple Silicon")
+    else:
+        device = torch.device("cpu")
+        print("Using CPU (no GPU acceleration available)")
+    
     tokenizer = CustomTokenizer()
     cache_file = "dataset_cache.txt"
     vocab_file = "vocab.json"
