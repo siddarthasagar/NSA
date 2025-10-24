@@ -1,35 +1,46 @@
-from image import Image
-from ARCGraph import (
-    ARCGraph,
-    Direction,
-    Rotation,
-    Mirror,
-    ImagePoints,
-    RelativePosition,
-)
-import random
-import os
-import numpy as np
-from multiprocessing import Process, Queue
-from PIL import Image as PILImage
 import json
-from llm.selector_prompt import generate_selector_prompt
-from plots import return_task_grid
-from extended_transformations.crop_grid import crop_grid_based
-from extended_transformations.connect_grid import connect_grid_based
-from extended_transformations.magnet_grid import magnet_grid_based
-from extended_transformations.upscale_grid import upscale_grid_based
-from extended_transformations.rotate_grid import rotate_grid_based
-from extended_transformations.mirror_grid import mirror_grid_based
-from extended_transformations.fill_grid import fill_grid_based
+import os
+import random
+from multiprocessing import Process, Queue
+
+import numpy as np
+from PIL import Image as PILImage
+
+from ARCGraph import ARCGraph, Direction, ImagePoints, Mirror, RelativePosition, Rotation
+from extended_transformations.arbitrary_duplicate_grid import arbitrary_duplicate_grid_based
 from extended_transformations.beam_grid import beam_grid_based
+from extended_transformations.connect_grid import connect_grid_based
+from extended_transformations.crop_grid import crop_grid_based
+from extended_transformations.fill_grid import fill_grid_based
+from extended_transformations.magnet_grid import magnet_grid_based
+from extended_transformations.mirror_grid import mirror_grid_based
 from extended_transformations.recolor_grid import recolor_grid_based
+from extended_transformations.rotate_duplicate import rotate_duplicate_grid_based
+from extended_transformations.rotate_grid import rotate_grid_based
 from extended_transformations.shift_grid import shift_grid_based
 from extended_transformations.truncate_grid import truncate_grid_based
-from extended_transformations.rotate_duplicate import rotate_duplicate_grid_based
-from extended_transformations.arbitrary_duplicate_grid import (
-    arbitrary_duplicate_grid_based,
-)
+from extended_transformations.upscale_grid import upscale_grid_based
+from image import Image
+from plots import return_task_grid
+
+
+def format_grid_for_tokenizer(grid_data):
+    """
+    Format grid data directly for tokenizer without LLM prompt generation.
+    Takes train data (list of input-output pairs) and formats as text.
+    """
+    if isinstance(grid_data, dict) and "train" in grid_data:
+        grid_data = grid_data["train"]
+    examples = []
+    for example in grid_data:
+        input_grid = example["input"]
+        output_grid = example["output"]
+        # Convert grids to pipe-separated format
+        input_grid_str = "\n".join(["|".join(map(str, row)) for row in input_grid])
+        output_grid_str = "\n".join(["|".join(map(str, row)) for row in output_grid])
+        examples.append(f"Input:\n{input_grid_str}\nOutput:\n{output_grid_str}")
+    return "\n".join(examples)
+
 
 # Original single-task configuration from the paper's authors
 # To use all training tasks for more diverse synthetic data generation, uncomment the following:
@@ -260,7 +271,7 @@ def prepare_and_save_transformed_data(
 def save_transformation(grids, transformed_grids, transformation_details, path2save):
     data = {
         "instruction": "You are an advanced AI model specialized in solving Abstraction and Reasoning Corpus (ARC) tasks.",
-        "input": generate_selector_prompt(
+        "input": format_grid_for_tokenizer(
             {
                 "train": [
                     {"input": grids[i], "output": transformed_grids[i]} for i in range(len(grids))
@@ -277,7 +288,7 @@ def save_transformation(grids, transformed_grids, transformation_details, path2s
 def append_transformation_to_file(file_path, grids, transformed_grids, transformation_details):
     new_transformation = {
         "instruction": "You are an advanced AI model specialized in solving Abstraction and Reasoning Corpus (ARC) tasks.",
-        "input": generate_selector_prompt(
+        "input": format_grid_for_tokenizer(
             {
                 "train": [
                     {"input": grids[i], "output": transformed_grids[i]} for i in range(len(grids))

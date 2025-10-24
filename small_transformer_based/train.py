@@ -20,9 +20,24 @@ from einops import repeat
 from multiprocessing import Pool
 from auxilaries.generate_transformation import generate_samples
 from plots import return_task_grid
-from llm.selector_prompt import generate_selector_prompt
 from task import Task
 from shutil import rmtree
+
+
+def format_grid_for_tokenizer(grid_data):
+    """
+    Format grid data directly for tokenizer without LLM prompt generation.
+    Takes train data (list of input-output pairs) and formats as text.
+    """
+    examples = []
+    for example in grid_data:
+        input_grid = example["input"]
+        output_grid = example["output"]
+        # Convert grids to pipe-separated format
+        input_grid_str = "\n".join(["|".join(map(str, row)) for row in input_grid])
+        output_grid_str = "\n".join(["|".join(map(str, row)) for row in output_grid])
+        examples.append(f"Input:\n{input_grid_str}\nOutput:\n{output_grid_str}")
+    return "\n".join(examples)
 
 
 class SinusoidalPositionalEncoding(nn.Module):
@@ -81,7 +96,7 @@ def batch_predict_transformations(model, tokenizer, device, task_data_list):
     for task_id, task_file, data_path in task_data_list:
         try:
             grid = return_task_grid(task_file)["train"]
-            prompt = generate_selector_prompt(grid)
+            prompt = format_grid_for_tokenizer(grid)
             prompt = extract_input_output_pairs(prompt)
             input_ids = tokenizer.encode(prompt)
             all_input_ids.append(torch.tensor(input_ids))
@@ -339,7 +354,7 @@ def evaluate_true(model, tokenizer, device, tta=True, tta_epochs=1, num_workers=
                 except Exception as e:
                     print(f"Error retrieving grid for task {task_id}: {e}")
                     continue
-                prompt = generate_selector_prompt(grid)
+                prompt = format_grid_for_tokenizer(grid)
                 prompt = extract_input_output_pairs(prompt)
                 input_ids = tokenizer.encode(prompt)
                 input_ids = torch.tensor(input_ids).unsqueeze(0).to(device)

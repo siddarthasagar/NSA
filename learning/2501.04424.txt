@@ -1,0 +1,951 @@
+NSA: Neuro-symbolic ARC Challenge
+Paweł Batorski1
+Jannik Brinkmann2
+Paul Swoboda1
+pawel.batorski@hhu.de
+jannik.brinkmann@uni-mannheim.de
+paul.swoboda@hhu.de
+1Heinrich Heine Universit¨at D¨usseldorf
+2University of Mannheim
+Train
+Inputs
+Train
+ Outputs
+ 
+Prediction
+Test Input
+Proposed
+ transformations
+primitives
+Search in the
+ space of proposed 
+transformations
+Found transformation 
+primitives and 
+parameters
+Figure 1. An overview of the NSA framework: Starting with input-output pairs, a transformer model is utilized to propose potential
+transformation primitives. These are then feed to the symbolic combinatorial search (ARGA [27]), which identifies the correct overall
+transformation and corresponding parameters solving the task for the given training input-output pairs. Finally, the selected transformation
+is applied to the test input to generate the final prediction.
+Abstract
+The Abstraction and Reasoning Corpus (ARC) evaluates
+general reasoning capabilities that are difficult for both
+machine learning models and combinatorial search meth-
+ods. We propose a neuro-symbolic approach that combines
+a transformer for proposal generation with combinatorial
+search using a domain-specific language. The transformer
+narrows the search space by proposing promising search di-
+rections, which allows the combinatorial search to find the
+actual solution in short time. We pre-train the trainsformer
+with synthetically generated data. During test-time we gen-
+erate additional task-specific training tasks and fine-tune
+our model. Our results surpass comparable state of the art
+on the ARC evaluation set by 27% and compare favourably
+on the ARC train set. We make our code and dataset pub-
+licly available at https://github.com/Batorskq/NSA.
+1. Introduction
+The Abstraction and Reasoning Corpus (ARC) chal-
+lenge [7] is a difficult few-shot benchmark for testing visual
+reasoning capabilities of machine learning models. The ca-
+pabilities of recent general-purpose LLM systems are, as of
+now, not good enough to solve ARC at human performance
+in a reasonably limited amount of time [19, 20, 28]. Ar-
+guably their pre-training seems to have not imbued them
+with enough of the necessary concepts required to solve
+ARC tasks reliably and without an excessive number of
+tries. It is unclear whether LLMs lack the correct level of
+abstraction and the specific type of high-level visual reason-
+ing used for solving visual riddles. On the other hand, spe-
+cialized combinatorial search methods using domain spe-
+cific languages (DSL) [2, 11, 17, 27] struggle with the great
+variety and generality of the ARC tasks, with no compact
+enough description of the search space being available to
+effectively solve the problem via traditional methods. At
+the same time, tasks in the ARC benchmark are not hard for
+humans, with most tasks seemingly requiring only some vi-
+arXiv:2501.04424v1  [cs.AI]  8 Jan 2025
+
+Train Sample 1
+Train Sample 2
+Train Sample 3
+Test Sample
+Transformations to solve the task: extract, update_color
+Train Sample 1
+Train Sample 2
+Train Sample 3
+Transformations to solve the task: extract, duplicate
+Test Sample
+Train Sample 1
+Train Sample 2
+Train Sample 3
+Test Sample
+Transformations to solve the task: upscale_grid
+Train Sample 2
+Train Sample 3
+Test Sample
+Transformations to solve the task: update_color
+Train Sample 1
+Train Sample 4
+DSL Rep.
+Capacity
+Effective
+Capacity
+ARGA
+✗
+✗
+ARGAe
+✓
+✗
+NSA
+✓
+✓
+Figure 2. Input-output pairs and a test image from selected ARC tasks, each with a distinct transformation challenge. Our solution is
+illustrated for each task. ARGA cannot solve any of the first three tasks since it cannot represent the needed transformation. Our extended
+DSL ARGAe has the representational capacity but can run into time-out during search and thus cannot find it effectively in practice. For the
+bottom right task ARGA can represent the transformation theoretically but neither ARGA nor ARGAe can find it due to a time-out during
+search. Necessary transformation primitives absent in ARGA’s DSL are marked in red: extract, duplicate, and upscale grid. In contrast,
+transformations present in ARGA’s original DSL, like update color, are highlighted in blue. For the tasks in the upper right and lower
+left corner all necessary transformation primitives are missing in ARGA, while for the upper left one transformation primitive is present
+and another is lacking. NSA addresses this dilemma by proposing the necessary transformation primitives to explore during combinatorial
+search.
+sual pattern matching and a limited amount of reasoning. In
+user studies, human participants solved around 80% of the
+tasks on average [15].
+This indicates that (i) currently pure pre-trained ML sys-
+tems are not yet capable of solving ARC with reasonably
+limited compute and may lack some fundamental capabili-
+ties to do so and (ii) specialized combinatorial approaches
+relying on DSLs cannot cope with the search space com-
+plexity. However, both approaches can be used to capture
+some aspects of humans solving ARC tasks well: DSLs can
+be used for reasoning on the right abstraction level in terms
+of composing elementary transformations. ML can be used
+to pick promising transformation candidates, mimicking the
+intuitive way a human will restrict his reasoning instead
+of enumerating all possible transformations. We propose
+a neuro-symbolic approach to solving ARC that combines
+these strengths of ML and DSL-based combinatorial meth-
+ods. In our approach the DSLs give us valuable inductive
+bias that allows us to reason on the right abstraction level,
+while the ML part guides the search process by proposal
+generation, allowing the combinatorial search to actually
+find solutions in a limited amount of time.
+
+To train our neuro-symbolic approach, the provided
+ARC training data is not enough. The training set consists
+of only 400 tasks, mostly with three or four input/output
+pairs each. Due to this limited training data, we syntheti-
+cally generate more training data to pre-train and test-time
+fine-tune our proposal generation transformer.
+Our empirical results indicate that our combined ap-
+proach can surpass pure ML- and combinatorial methods.
+Contributions:
+In detail, our contributions are
+DSL: We extend the DSL from [27] to increase its rep-
+resentational capacity, enabling it to solve significantly
+more ARC tasks.
+Transformer-Guided Neuro-Symbolic Search: We train
+a transformer model to suggest suitable transformation
+primitives that restrict the search process. We pre-train
+our model on a large set of ARC tasks synthetically gen-
+erated by hind-sight relabeling. During inference time,
+we fine-tune our model by again synthetically generating
+ARC tasks using only the currently considered task im-
+ages. The transformer then generates proposals that are
+fed to the combinatorial DSL search.
+Experiments: We demonstrate the efficacy of our ap-
+proach on the ARC train and evaluation set. On the eval-
+uation set we outperform comparable baselines, i.e. the
+pure DSL methods [2, 11, 27] model as well as recent
+ML approaches [5, 19].
+2. Related Work
+The ARC challenge [7] was proposed to benchmark gen-
+eral reasoning capabilities that seem easy for humans but
+hard for current ML methods and hand-crafted search al-
+gorithms. It has lead to a large number of attempts using
+various paradigms for its solution. To spur progress, leader-
+boards have been made available that measure performance
+of submitted systems. For inclusion in the primary leader-
+board, the model may not call any outside or proprietary
+LLM and a 30-minute computation time limit for each task
+must be obeyed. For models that do not adhere to these
+requirements, a secondary leaderboard can be used.
+We categorize related work on solving the ARC chal-
+lenge into learning based and DSL-based approaches and
+also discuss simpler alternatives to full ARC.
+2.1. ML
+The work [28] analyzes one-shot prompting of large lan-
+guage models (LLMs) for ARC Challenge problems. The
+authors examine the performance of LLaMA 2 [24] and
+GPT-4 [1] with various grid representations to address
+ARC tasks. By applying few-shot and in-context few-shot
+prompting, they solve only 13 tasks from a chosen subset
+of ARC tasks that can be easily addressed by the DSL ap-
+proach in [27]. However, incorporating the abstract graph
+reasoning proposed in [27] improves their results, enabling
+them to solve 23 out of 50 tasks. While this graph abstrac-
+tion significantly enhances the LLMs’ reasoning capabili-
+ties on ARC tasks, the overall performance remains far be-
+low the results achieved with simple abstraction-based rea-
+soning alone. The work [20] explores various methods of
+representing ARC images in LLMs.
+The work [16] uses a differential neural computer to
+solve ARC problems with a grid size of up to 10 × 10. The
+approach [4] uses DreamCoder [9] for solving a small sub-
+set of ARC tasks. An imitation learning algorithm based on
+the decision transformer [6] and a custom clustering method
+is used in [23] for solving small ARC tasks. Due to scaling
+or representational capacity issues the above works are all
+applied to small subsets of ARC and do not aim to solve the
+full ARC dataset.
+The works [19] and [26] use pre-trained LLMs for di-
+rectly outputting the transformation of the test input image
+when conditioned on each task’s input output pairs. Green-
+blatt’s pure LLM method [12] used GPT-4o [22] and few-
+shot prompting to sample python programs for describing
+ARC transformations. For each task up to 8000 programs
+are sampled. While achieving impressive results, this puts
+the approach outside the evaluation protocol of using 30
+minutes per task and not using a closed source LLM. The vi-
+sion transformer [8]-based work [18] uses the spatial image
+structure and trains on procedurraly generated tasks [14].
+However, an evaluation on the ARC train or eval set is miss-
+ing.
+The closest work to ours is [5], which uses a large lan-
+guage model fine-tuned on code generation to write pro-
+grams using the DSL [13]. Similar to us, the transformer is
+fine-tuned using synthetically generated training data using
+hindsight relabeling. In contrast to us, the DSL [13] does
+not come with a combinatorial search, hence relying for the
+full search process on the ML model. Also, since the used
+transformer is several orders of magnitude larger than ours,
+test time adaptation is not possible to do, thus relying more
+on the capabilities of their pre-trained model.
+The concurrent work [3] proposes, similarly to us, to
+use test-time training for ARC. They use an 8B-parameter
+LLM, but due to the great computational demands this work
+does not allow for 30-minute per task inference.
+2.2. DSL & Combinatorial
+The ARC challenge has inspired several dedicated DSLs for
+desribing its transformations, sitting at different levels of
+abstraction and representational power.
+The graph based approach [27] decomposes a transfor-
+mation into a series of filters and transformation primitives,
+that together work on a more abstract graph representation.
+
+It comes together with a combinatorial search algorithm that
+finds the right overall transformation. In its basic form it is
+somewhat limited in its representational power by a small
+set of elementary transformation primitives, since otherwise
+the combinatorial search would have difficulties traversing
+a larger search space.
+Ainosoon et al [2] propose an imperative style DSL for
+ARC and tasks are solved through bread-first depth search
+on a search tree.
+The work [17] introduces a novel DSL inspired by [27]
+and frames the ARC Challenge as a generalized planning
+problem. By incorporating graph abstraction [27], their so-
+lution prunes actions extensively to streamline the search
+process. Their approach closely resembles ours. However,
+while we expand the DSL to support a broader search space,
+their extension remains minimal, likely due to challenges in
+finding correct solutions as the search space grows. Addi-
+tionally, they evaluate their solution on only a small subset
+of ARC tasks.
+The work [11] provides a DSL written as functional pro-
+grams in OCaml and searches heuristically for solutions
+using minimum description length as quality criterion. It
+reaches state of the art results for pure DSL-based methods.
+Michael Hodel’s DSL [13] decomposes a transformation
+into a series of 165 elementary operations. Hand-written
+programs are given that can solve all of the 400 ARC train
+tasks. However, to describe the most complex transforma-
+tions found in the ARC train set, sequences of up to 60 el-
+ementary transformations are necessary. This can limit the
+practical effectivity of the DSL since such long programs
+might be currently too complex for ML models to generate.
+2.3. Simplified ARC Benchmarks
+Due to the complexity of the original ARC benchmark pro-
+posed by [7], several authors recommend first focusing on
+simpler tasks, as some of the original ARC tasks are chal-
+lenging even for humans. The work in [28] introduces the
+1D-ARC benchmark, which simplifies ARC tasks by re-
+ducing them to one dimension, making object association
+easier to analyze by limiting relationships to right-left inter-
+actions. Meanwhile, [21] presents ConceptARC, designed
+to simplify ARC tasks so that nearly all are easily solvable
+by humans, maintaining two-dimensional images but with
+an average human success rate of 95%. Although our pa-
+per does not include evaluations on these simplified ARC
+benchmarks, it underscores the difficulty of the original
+ARC tasks.
+3. Method
+Our method consists of three parts.
+DSL: The domain-specific language (DSL) for encoding
+image transformations.
+Proposal Generation: We train a transformer model to
+predict which specific transformations in the DSL need to
+be used to get the input/output relationships on the few-
+shot examples of the current task,
+Combinatorial Search: for finding the exact subset and
+order of transformations and their parameters.
+Our methodological contribution lies in (i) extending
+ARGA’s DSL by additional transformation primitives, en-
+larging its representational capacity.
+(ii) Introducing a
+transformer-guided search via proposing transformation
+primitives.
+(iii) Generating synthetic training examples
+by hindsight relabeling for pre-training and test-time fine-
+tuning the transformer.
+3.1. DSL & Symbolic Engine
+We use the “Abstract Reasoning with Graph Abstractions”
+(ARGA) DSL from [27]. The ARGA DSL consists of three
+main objects: (i) abstract representations, (ii) filters and
+(iii) transformation primitives.
+Abstract representations describe the input images in
+terms of a more abstract graphical structure. ARGA as-
+sociates connected components of the input pixel grids
+w.r.t. different connectivity criteria as graph nodes. For
+example, a node might be a same-color 4-connected sub-
+set of the pixel grid. Edges are added according to various
+spatial proximity criteria. Note that there can be multiple
+abstract representations of the same image. In Figure 3
+we show two different graph abstractions of the same im-
+age.
+Filters select certain nodes in the abstraction graph. Possi-
+ble filter operations are to select by size, color, neighbor-
+hood relations etc.
+Transformation primitives modify input nodes selected
+by filters. Exemplary transformation primitives are up-
+date color of a node, rotate, extend by appending addi-
+tional pixels in some directions etc.
+Thus, a full transformation consists of choosing the used
+abstraction, a sequence of filters and filter parameters and a
+sequence of transformation primitives and their parameters.
+An example of a full transformation is included in Figure 3
+ARGA provides 4 base filters out of the box. More com-
+plex filters can be constructed by composing basic ones.
+Additionally, 12 transformation primitives are given.
+We add 15 more generic and widely usable transforma-
+tion primitives and call the resulting DSL extended ARGA,
+or abbreviate as ARGAe. The list of additional transforma-
+tion primitives is given in Table 1.
+Remark. Importantly, increasing ARGA’s representational
+capacity by adding more transformation primitives might
+
+Size=6
+Size=4
+Connected components of non-black pixels by color
+Size=1
+Size=2
+Size=1
+Size=2
+Size=2
+Size=2
+Vertically connected components of non-background pixels by color
+Filter: filter_by_color
+Filter Parameters: Color=Red, Exclude=False
+Transformation: move_node_max
+Transformation Parameters: Direction=To the
+object of color Light Gray
+Figure 3. Two distinct abstractions of the same grid. The upper abstraction groups adjacent pixels of the same color as a single node,
+while the bottom abstraction groups vertically adjacent components as a single node. Each abstraction also uses a different method for
+associating nodes within the graph. The image includes the filter, filter parameters, transformation, and transformation parameters needed
+to achieve the desired output. Note that the choice of abstraction is crucial, since the bottom abstraction will not lead to a correct solution.
+1. fill_rectangle
+2. rotate_grid
+3. no_trans 
+1. beam
+2. no_trans
+3. no_trans
+All training 
+examples 
+from 
+a
+task
+Outputs after 
+random transformations
+Figure 4. Hindsight relabeling example: Starting with the original
+input, we sample abstractions, filters, filter parameters, transfor-
+mations and transformation parameters. We apply them to the grid,
+generating new input-output pairs with the corresponding transfor-
+mation. The labeled pair is added to the transformer’s training set.
+make it worse in practice. Since more transformation prim-
+itives mean a larger search space to traverse, some solu-
+tions found previously by ARGA’s combinatorial search on
+the smaller base set of transformation primitives might not
+be found on the enlarged set. This arguably is one of the
+reasons why [27] did not include a larger set of transfor-
+mation primitives.
+Combinatorial Search
+ARGA implements a greedy
+best-first search for traversing a search tree. Each search
+tree node corresponds to a set of graphs that were obtained
+by a partial transformation of the input images. Search tree
+nodes are expanded in the order of ascending distance to
+the output images. Transformations are pruned by choosing
+constraints which they are not allowed to violate. Hashing
+is used to detect different transformations that result in the
+same update on the considered images. A taboo list is used
+to suppress exploring transformations that have not led to
+Transformation
+Primitive
+Description
+extract
+Extract a node
+duplicate
+Duplicate a grid a number of times
+along an axis
+upscale grid
+Multiply grid size by a factor and ex-
+pand every pixel accordingly
+fill
+Fill a subgrid with a specified object
+magnet
+Move pixels until they touch a speci-
+fied border (either image border or a
+node)
+beam
+Shoot colored line in specific direc-
+tions
+shift
+Shift the grid in a specified direction
+mirror duplicate
+Duplicate and mirror the grid
+rotate duplicate
+Duplicate the grid with a specified list
+of angles
+mirror grid
+Mirror the grid along a specified axis
+rotate grid
+Rotate the grid by a specified angle
+connect
+Connect two pixels or objects with a
+line of a specified color
+recolor
+Recolor the object to a specified color
+truncate
+remove specified object and recolor
+pixels to background
+Table 1. Additional transformation primitives in ARGAe.
+better results.
+3.2. Transformer-Guided Search
+To guide the search process, we train a transformer to gen-
+erate transformation primitive proposals. Given several in-
+put/output images of a single ARC task, it predicts (i) how
+many transformation primitives are used and (ii) which
+transformation primitives are used in each step.
+
+Architecture
+We
+use
+a
+standard
+Transformer-
+encoder [25] with a custom tokenizer.
+A token is
+added for encoding each image color, new image row,
+new input image and new output image. We append three
+classification tokens for predicting a sequence of up to three
+transformations primitives. If fewer than three primitives
+are enough, classification tokens can also predict that no
+primitive is needed.
+For this, the additional no trans
+primitive is used. We tested different configurations and
+empirically observed that three primitives are sufficient
+to solve most ARC tasks that can be represented through
+ARGAe.
+Synthetic ARC Task Generation
+For generating a syn-
+thetic task we first randomly sample an ARC task and take
+only its input images.
+Then we randomly sample a se-
+quence of abstractions, filters, filter parameters, transforma-
+tion primitives and their parameters. The transformation is
+applied on all input images from the sampled task. If on
+any input image the transformation did not result in an al-
+tered output image, we discard the sampled transformation.
+After generating synthetic tasks, we also remove duplicate
+tasks. See Figure 4 for an illustration of the data generation
+process.
+Pre-Training
+We pre-train the transformer on 31125 syn-
+thetically generated tasks with standard categorical cross-
+entropy.
+Test-Time Adaptation
+During inference time, we gener-
+ate additional synthetic training tasks by sampling random
+transformations but applying them on the considered input
+images only. The pre-trained model is fully fine-tuned.
+4. Experiments
+In this section we evaluate the effectiveness of our neuro-
+symbolic approach on both the train and eval dataset of
+ARC [7]. We find that our approach can significantly im-
+prove upon comparable sota methods on the ARC evalua-
+tion set and that both the neural and symbolic parts of our
+approach are necessary for good performance.
+Data Generation
+We pre-train our model on 31125 arti-
+ficially generated training tasks. Input images were taken
+from both the train and eval set, similar to the data genera-
+tion process from CodeIt [5]. We stress that no ground truth
+transformations were seen during training. Roughly 40%
+of the generated tasks have one transformation primitive,
+another 40% have two and 20% need three. For tasks using
+one transformation primitive we balanced the training set so
+that each transformation primitive was generated similarly
+often.
+Architecture & Training Details
+Our transformer en-
+coder for the proposal generation has 8 layers, 512 feature
+dimensions and 2048 feedforward dimensions and 8 atten-
+tion heads per layer. This gives 25.3 million parameters
+overall. We pre-train for 27 epochs with a learning rate of
+5e −5 and batch size 32 using the ADAM optimizer. For
+TTA we finetune for 15 epochs with the same parameters.
+Our custom tokenizer has a vocabulary size of 45. During
+our training we also perform learning rate decay. After ev-
+ery 10 epochs we multiply the learning rate by 0.1.
+Our Methods
+We provide three methods corresponding
+to our individual contributions.
+ARGAe: The pure ARGA [27] DSL approach with ex-
+tended transformation set. We use the provided combi-
+natorial search algorithm on all possible filters and trans-
+formations.
+NSA w/o TTA: Using transformer-guided search with
+the pre-trained transformer, we predict up to three con-
+secutive transformation primitives from ARGAe.
+We
+have three classification tokens for transformation primi-
+tive proposal. If the second one predicts no trans, mean-
+ing only one transformation primitive will be needed, we
+take the top-5 transformation primitives proposed from
+the first classification token and feed it to the search algo-
+rithm. If the third classification token predicts no trans,
+meaning two transformation primitives are needed to de-
+scribe the overall transformation, we feed the top-4 trans-
+formation primitives of the first two classification tokens
+to the combinatorial search. In the remaining case we
+feed the top-3 transformation primitive predictions of
+each classification token to the combinatorial search.
+NSA: Using transformer-guided grid search with test-time
+adaptation, for each task, we fine-tune on 2500 train-
+ing samples generated on the given input for 15 epochs.
+Other parameters are equal to NSA w/o TTA.
+Literature Baselines
+We compare against recent SOTA
+methods that follow a comparable evaluation protocol, that
+is compute is limited to 30 minutes and evaluation is done
+on at least some subset of either the ARC train or eval set.
+This gives us the original ARGA method [27] and the other
+DSL methods [2, 2, 10]. Among the pure ML-based meth-
+ods we compare to [19]. Additionally, we compare against
+the DSL/LLM method CodeIt [5]. Hence, we do not com-
+pare against methods [3, 12, 18] that do not follow this eval-
+uation protocol or report results on a different task set.
+Some comparable methods from the literature have eval-
+uated on subsets of both train and test sets instead of the full
+ones for various reasons. For example, CodeIt [5] uses
+the train set to choose hyperparameters. ARGA [27] only
+
+evaluates on promising tasks for which the authors think it
+has the representational capacity etc. We also believe that
+some approaches forego testing on the full train/evaluation
+set due to the large time investment this would incur.
+Evaluation Protocol
+For each task, we allow 30 minutes
+of computation time. We report results on each set for com-
+parison. For TTA, this includes the time to generate new
+data and finetune the model. Most other approaches allow
+for trying three transformations and counting only the po-
+tentially correct one. In contrast to this, but similar to [19],
+we only make one attempt for each task.
+Method
+ARC Train Set
+ARC Eval Set
+Ferre [10]
+29/400
+6/400
+Ferre [11]
+96/400
+23/400
+Ainooson MLE [2]
+70/400
+17/400
+Ainooson Brute Force [2]
+104/400
+26/400
+Mirchandani [19]
+56/400
+27/400
+CodeIt [5]
+-
+59/400
+ARGA [27]
+50/400
+9/400
+ARGAe
+6/400
+22/400
+NSA w/o TTA
+48/400
+63/400
+NSA (ours)
+78/400
+75/400
+Table 2. Results on the training and evaluation datasets of ARC
+tasks. Best results are colored red, the second best orange, and the
+third best yellow.
+Results & Discussion
+In Table 2 we compare our results
+with existing baselines from the literature. We outperform
+baselines that follow the ARC evaluation protocol by 27%
+on the evaluation set and land on the third place on the ARC
+train set. Our best-performing method NSA solves 78 tasks
+on the train set, with 104 being solved by [2]. We solve
+75 tasks on the eval set, with 59 being solved by the next-
+best approach CodeIt [5]. Interestingly, we see that also our
+method NSA w/o TTA outperforms comparable methods
+on the ARC eval set with 63 tasks solved. When using TTA
+in NSA performance is pushed even further.
+It is noteworthy, that our approach has similar perfor-
+mance on both train and test set, while most other methods
+do significantly better on the training set. Possibly this is
+due to the nature of the ARGAe DSL, which seems to in-
+clude transformations that help solve tasks in both evaluate
+and train.
+We can also see the trade-off between more expressive
+DSL vs. more required compute time for the combinato-
+rial search in ARGAe play out differently for train and eval.
+ARGAe performance is drastically reduced on the train set
+as compared to plain ARGA. It seems that the increased rep-
+resentational capacity has not helped, but rather made the
+combinatorial search more difficult, thus leading to a lower
+number of found transformations. On the eval set, the sit-
+uation is reversed, with increased representational capacity
+not hindering the search process as much. NSA overcomes
+this trade-off by limiting the search space while retaining
+ARGAe’s representational capacity.
+While TTA gives a significant boost, there is a trade-off
+between computation spent on the combinatorial search vs.
+more fine-tuning. In our experince it pays most to invest
+compute into fine-tuning. We have observed that perfor-
+mance gains do not plateau after one or two fine-tuning it-
+erations but can continue up to 15 epochs. Investing more
+time in data generation and fine-tuning enhances prediction
+accuracy and increases the likelihood that the transformer
+identifies the correct transformation primitive.
+This ap-
+proach allows our search engine to prioritize finding the cor-
+rect transformation among the most probable predictions.
+We find it especially beneficial to prioritize fine-tuning over
+allocating more time to task-solving.
+Correspondingly, the data-generation and fine-tuning
+time for each task amounts to around 22 minutes. The av-
+erage time spent on data generation, fine tuning and task
+solving for NSA is included in Figure 5.
+Data Generation
+Fine-Tuning
+Task Solving
+0
+3
+6
+9
+12
+15
+18
+21
+Time (minutes)
+4.35
+18.15
+0.95
+Figure 5. Comparison of the execution times of NSA’s three com-
+ponents: Data Generation, Fine-Tuning, and Task Solving. We
+averaged the results across all subsets of tasks we solved.
+NSA Components Ablations
+In Table 2 we further ex-
+amine the necessity of our two key components:
+• Narrowing the search space by proposal generation
+through transformer guided search and
+• Test-time adaptation (TTA) during inference.
+We see that transformer guided search without TTA, i.e.
+NSA w/o TTA improves upon ARGAe 8-fold on the train
+set and almost 3-fold on the eval set. Additionally using
+TTA in our method NSA further improves by 62% on the
+train set and by 20% on the exal set as compared to no TTA
+with our method NSA w/o TTA.
+
+TTA Ablations
+We analyze the importance of how long
+to train and how many data to train on during TTA fine-
+tuning. For both ablations we take 50 random tasks over-
+all, such that for 25 of those we can predict the necessary
+transformation primitives without TTA, while for the rest
+we cannot do so.
+First, we analyze the influence of the number of TTA
+epochs on the overall results by evaluating models with 0, 1,
+5, 10, and 15 TTA epochs in Figure 6. For this experiment,
+we provide two metrics:
+• Prediction Inclusion - This metric indicates whether the
+true transformation primitives lie within the set of pro-
+posed ones. It is essential to assess whether the trans-
+former, after TTA, can correctly predict the transforma-
+tion primitives at all.
+• Prediction Rank - This metric calculates whether the true
+transformation primitive has been predicted as most prob-
+able (rank 1), second most probable (rank 2) and so on.
+Prediction rank is crucial because the search engine prior-
+itizes the most probable transformation primitive first; if
+the true transformation ranks low, the search may become
+harder.
+As shown in Figure 6, the average prediction rank does
+not change much across all TTA epochs. However, the num-
+ber of tasks solved fluctuates with different counts of TTA
+epochs. Notably, some more difficult tasks yield correct
+predictions only when using 15 TTA epochs, while eas-
+ier ones often require just 1 TTA epoch for a correct pre-
+diction. Prioritizing the total number of solved tasks, we
+choose 15 fine-tuning epochs for our experiments. This fig-
+ure also highlights the importance of TTA, as even a sin-
+gle epoch significantly boosts the number of tasks with cor-
+rectly predicted transformation primitives from 50% to 88%
+compared to using no TTA on the ablation tasks.
+0
+1
+5
+10
+15
+Number of Adaptation Epochs
+Values
+5.0
+1.8
+1.7
+1.7
+1.8
+50%
+88%
+88%
+90%
+94%
+Prediction Rank
+Predicted Inclusion
+Figure 6. Prediction Rank and Predicted Inclusion with respect to
+different TTA Epochs on 50 tasks. Each TTA model was trained
+using 2500 generated samples.
+Second, in Figure 7 we examine the effect of varying the
+number of TTA training tasks on Prediction Rank and Pre-
+dicted Inclusion. We tested sample sizes of 100, 500, 1500,
+and 2500, along with a baseline comparison of no TTA (de-
+noted as 0 samples in the figure). The results show that
+after 500 epochs Predicted Inclusion stabilizes at 88%. Us-
+ing only 100 already significantly outperforms no TTA, but
+does not saturate yet. As the number of TTA samples in-
+creases, Prediction Rank improves steadily, suggesting that
+a larger sample count enables the transformer to make more
+accurate predictions.
+0
+100
+500
+1500
+2500
+Number of Samples Used for TTA
+Values
+5.0
+2.4
+2.0
+1.9
+1.7
+50%
+74%
+88%
+88%
+88%
+Prediction Rank
+Predicted Inclusion
+Figure 7. Prediction Rank and Predicted Inclusion with respect
+to different number of samples used in TTA for 50 ablation tasks.
+Each TTA model was estimated for 5 epochs.
+5. Conclusion
+We have presented a neuro-symbolic approach for ARC
+challenge. We show that combining abstraction capabili-
+ties of hand-designed DSLs with a learned proposal gener-
+ation outperforms comparable purely hand-designed search
+as well as pure ML methods. One immediate approach is to
+scale up both the DSL by increasing its representational ca-
+pacity even more and equally increase the transformer net-
+work for the proposal generation, e.g. by using pre-trained
+LLMs and generating larger amounts of training data. How-
+ever, this approach would soon require more compute than
+can be provided in 30 minutes. Another idea is to use sev-
+eral iterations for guessing the correct transformation, iter-
+atively improving the current transformation candidate by
+inspecting where errors occurred, analoguously to LLM ap-
+proaches [29].
+6. Acknowledgments
+We extend our gratitude to Adrian Kosmala for his insight-
+ful contributions to the project discussions.
+References
+[1] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama
+Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo
+
+Almeida, Janko Altenschmidt, Sam Altman, Shyamal
+Anadkat, et al. Gpt-4 technical report. arXiv preprint
+arXiv:2303.08774, 2023. 3
+[2] James Ainooson, Deepayan Sanyal, Joel P Michelson,
+Yuan Yang, and Maithilee Kunda. An approach for
+solving tasks on the abstract reasoning corpus. arXiv
+preprint arXiv:2302.09425, 2023. 1, 3, 4, 6, 7
+[3] Ekin Aky¨urek, Mehul Damani, Linlu Qiu, Han Guo,
+Yoon Kim, and Jacob Andreas.
+The surprising ef-
+fectiveness of test-time training for abstract reasoning.
+2024. 3, 6
+[4] Simon Alford, Anshula Gandhi, Akshay Rangamani,
+Andrzej Banburski, Tony Wang, Sylee Dandekar, John
+Chin, Tomaso Poggio, and Peter Chin. Neural-guided,
+bidirectional program search for abstraction and rea-
+soning. In Complex Networks & Their Applications
+X: Volume 1, Proceedings of the Tenth International
+Conference on Complex Networks and Their Applica-
+tions COMPLEX NETWORKS 2021 10, pages 657–
+668. Springer, 2022. 3
+[5] Natasha Butt, Blazej Manczak, Auke Wiggers, Cor-
+rado Rainone, David Zhang, Micha¨el Defferrard, and
+Taco Cohen. Codeit: Self-improving language mod-
+els with prioritized hindsight replay. In International
+Conference on Machine Learning. PMLR, 2024. 3, 6,
+7
+[6] Lili Chen, Kevin Lu, Aravind Rajeswaran, Kimin Lee,
+Aditya Grover, Misha Laskin, Pieter Abbeel, Aravind
+Srinivas, and Igor Mordatch. Decision transformer:
+Reinforcement learning via sequence modeling. Ad-
+vances in neural information processing systems, 34:
+15084–15097, 2021. 3
+[7] Franc¸ois Chollet.
+On the measure of intelligence,
+2019. 1, 3, 4, 6
+[8] Alexey
+Dosovitskiy,
+Lucas
+Beyer,
+Alexander
+Kolesnikov,
+Dirk
+Weissenborn,
+Xiaohua
+Zhai,
+Thomas Unterthiner, Mostafa Dehghani, Matthias
+Minderer,
+Georg Heigold,
+Sylvain Gelly,
+Jakob
+Uszkoreit, and Neil Houlsby.
+An image is worth
+16x16 words:
+Transformers for image recognition
+at scale.
+In International Conference on Learning
+Representations, 2021. 3
+[9] Kevin Ellis, Lionel Wong, Maxwell Nye, Mathias
+Sable-Meyer, Luc Cary, Lore Anaya Pozo, Luke He-
+witt, Armando Solar-Lezama, and Joshua B Tenen-
+baum.
+Dreamcoder: growing generalizable, inter-
+pretable knowledge with wake–sleep bayesian pro-
+gram learning.
+Philosophical Transactions of the
+Royal Society A, 381(2251):20220050, 2023. 3
+[10] S´ebastien Ferr´e. First steps of an approach to the arc
+challenge based on descriptive grid models and the
+minimum description length principle. arXiv preprint
+arXiv:2112.00848, 2021. 6, 7
+[11] S´ebastien Ferr´e. Tackling the abstraction and reason-
+ing corpus (arc) with object-centric models and the
+mdl principle. In International Symposium on Intel-
+ligent Data Analysis, pages 3–15. Springer, 2024. 1,
+3, 4, 7
+[12] Ryan Greenblatt. Getting 50% (sota) on ARC-AGI
+with GPT-4o, 2024. 3, 6
+[13] Michael Hodel. Domain specific language for the ab-
+straction and reasoning corpus (arc-dsl). https://
+github.com/michaelhodel/arc-dsl, 2023.
+3, 4
+[14] Michael Hodel. Re-arc: Reverse-engineering the ab-
+straction and reasoning corpus. https://github.
+com/michaelhodel/re-arc, 2024. 3
+[15] Aysja Johnson, Wai Keen Vong, Brenden M Lake, and
+Todd M Gureckis. Fast and flexible: Human program
+induction in abstract reasoning tasks. arXiv preprint
+arXiv:2103.05823, 2021. 2
+[16] Victor Kolev, Bogdan Georgiev, and Svetlin Penkov.
+Neural abstract reasoner, 2020. 3
+[17] Chao Lei, Nir Lipovetzky, and Krista A Ehinger. Gen-
+eralized planning for the abstraction and reasoning
+corpus. In Proceedings of the AAAI Conference on
+Artificial Intelligence, pages 20168–20175, 2024. 1, 4
+[18] Wenhao
+Li,
+Yudong
+Xu,
+Scott
+Sanner,
+and
+Elias Boutros Khalil.
+Tackling the abstraction
+and reasoning corpus with vision transformers: the
+importance of 2d representation,
+positions,
+and
+objects. arXiv preprint arXiv:2410.06405, 2024. 3, 6
+[19] Suvir Mirchandani, Fei Xia, Pete Florence, Brian
+Ichter, Danny Driess, Montserrat Gonzalez Arenas,
+Kanishka Rao, Dorsa Sadigh, and Andy Zeng. Large
+language models as general pattern machines, 2023.
+1, 3, 6, 7
+[20] Melanie Mitchell, Alessandro B Palmarini, and Ar-
+seny Moskvichev. Comparing humans, gpt-4, and gpt-
+4v on abstraction and reasoning tasks. arXiv preprint
+arXiv:2311.09247, 2023. 1, 3
+[21] Arseny Moskvichev, Victor Vikram Odouard, and
+Melanie Mitchell. The conceptarc benchmark: Eval-
+uating understanding and generalization in the arc do-
+main. arXiv preprint arXiv:2305.07141, 2023. 4
+[22] OpenAI and Aaron Hurst et al. GPT-4o system card.
+2024. 3
+[23] Jaehyun Park, Jaegyun Im, Sanha Hwang, Mintaek
+Lim, Sabina Ualibekova, Sejin Kim, and Sundong
+Kim. Unraveling the arc puzzle: Mimicking human
+solutions with object-centric decision transformer,
+2023. 3
+[24] Hugo Touvron, Louis Martin, Kevin Stone, Peter
+Albert, Amjad Almahairi, Yasmine Babaei, Nikolay
+Bashlykov, Soumya Batra, Prajjwal Bhargava, Shruti
+
+Bhosale, et al. Llama 2: Open foundation and fine-
+tuned chat models. arXiv preprint arXiv:2307.09288,
+2023. 3
+[25] A Vaswani. Attention is all you need. Advances in
+Neural Information Processing Systems, 2017. 6
+[26] Ruocheng Wang, Eric Zelikman, Gabriel Poesia,
+Yewen Pu, Nick Haber, and Noah Goodman.
+Hy-
+pothesis search: Inductive reasoning with language
+models. In The Twelfth International Conference on
+Learning Representations, 2024. 3
+[27] Yudong Xu, Elias B Khalil, and Scott Sanner. Graphs,
+constraints, and search for the abstraction and reason-
+ing corpus. In Proceedings of the AAAI Conference on
+Artificial Intelligence, pages 4115–4122, 2023. 1, 3,
+4, 5, 6, 7
+[28] Yudong Xu, Wenhao Li, Pashootan Vaezipoor, Scott
+Sanner, and Elias B Khalil.
+Llms and the abstrac-
+tion and reasoning corpus: Successes, failures, and
+the importance of object-based representations. arXiv
+preprint arXiv:2305.18354, 2023. 1, 3, 4
+[29] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak
+Shafran, Karthik Narasimhan, and Yuan Cao. React:
+Synergizing reasoning and acting in language models.
+arXiv preprint arXiv:2210.03629, 2022. 8
