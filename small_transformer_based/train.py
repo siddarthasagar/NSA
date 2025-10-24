@@ -17,6 +17,7 @@ from torch.nn.utils.rnn import pad_sequence
 import torch.optim.lr_scheduler as lr_scheduler
 from sklearn.model_selection import train_test_split
 from einops import repeat
+from multiprocessing import Pool
 from auxilaries.generate_transformation import generate_samples
 from plots import return_task_grid
 from llm.selector_prompt import generate_selector_prompt
@@ -68,7 +69,108 @@ def extract_first_from_logits(tokenizer, logits, index, number, already_added=[]
     return top_predictions
 
 
-def evaluate_true(model, tokenizer, device, tta=True, tta_epochs=1):
+def batch_predict_transformations(model, tokenizer, device, task_data_list):
+    """Batch inference: predict transformations for all tasks at once."""
+    model.eval()
+    all_predictions = {}
+
+    # Prepare all inputs
+    all_input_ids = []
+    valid_tasks = []
+
+    for task_id, task_file, data_path in task_data_list:
+        try:
+            grid = return_task_grid(task_file)["train"]
+            prompt = generate_selector_prompt(grid)
+            prompt = extract_input_output_pairs(prompt)
+            input_ids = tokenizer.encode(prompt)
+            all_input_ids.append(torch.tensor(input_ids))
+            valid_tasks.append((task_id, task_file, data_path))
+        except Exception as e:
+            print(f"Error preparing task {task_id}: {e}")
+            all_predictions[task_id] = []
+
+    if not valid_tasks:
+        return all_predictions
+
+    # Batch inference
+    padded_input_ids = pad_sequence(all_input_ids, batch_first=True, padding_value=0).to(device)
+    attention_mask = (padded_input_ids != tokenizer.vocab.get("<PAD>", 0)).to(device)
+
+    with torch.no_grad():
+        batch_logits = model(padded_input_ids, attention_mask=attention_mask)
+
+    # Extract predictions for each task
+    for idx, (task_id, task_file, data_path) in enumerate(valid_tasks):
+        logits = batch_logits[idx : idx + 1]  # Keep batch dim
+        second_token = torch.argmax(logits[0][2]).item()
+        include_second = tokenizer.decode([second_token]) != "no_trans"
+        include_third = False  # Only 3 cls tokens (0,1,2)
+
+        top3_predictions = []
+        if not include_second and not include_third:
+            to_consider = 5
+            top3_predictions = extract_first_from_logits(
+                tokenizer=tokenizer,
+                logits=logits,
+                index=0,
+                number=to_consider,
+                already_added=[],
+            )
+        if include_second:
+            to_consider = 4
+            preds_first = extract_first_from_logits(
+                tokenizer=tokenizer, logits=logits, index=0, number=to_consider
+            )
+            preds_second = extract_first_from_logits(
+                tokenizer=tokenizer,
+                logits=logits,
+                index=1,
+                number=to_consider,
+                already_added=preds_first,
+            )
+            top3_predictions += preds_first + preds_second
+        if include_third:
+            to_consider = 3
+            preds_third = extract_first_from_logits(
+                tokenizer=tokenizer,
+                logits=logits,
+                index=2,
+                number=to_consider,
+                already_added=top3_predictions,
+            )
+            top3_predictions += preds_third
+
+        top3_predictions = [pred for pred in top3_predictions if pred != "no_trans"]
+        top3_predictions = list(dict.fromkeys(top3_predictions))
+        all_predictions[task_id] = top3_predictions
+
+    return all_predictions
+
+
+def _solve_single_task(task_data):
+    """Worker function for parallel task solving."""
+    task_id, task_file, data_path, predictions = task_data
+    task_key = task_file.replace(".json", "")
+
+    try:
+        task = Task(
+            os.path.join(data_path, task_file),
+            proposed_transformations=predictions,
+        )
+        solved = task.solve()
+        if solved:
+            print(f"Task {task_id} solved successfully with predicted transformations.")
+        else:
+            print(f"Task {task_id} could not be solved with predicted transformations.")
+    except Exception as e:
+        print(f"Error solving task {task_id} with predicted transformations: {e}")
+        solved = False
+
+    return task_key, solved, predictions
+
+
+def evaluate_true(model, tokenizer, device, tta=True, tta_epochs=1, num_workers=3, max_tasks=None):
     model.eval()
     dataset_splits = {"train": "dataset/training", "val": "dataset/validation"}
     results = {"train": {}, "val": {}}
@@ -102,23 +204,39 @@ def evaluate_true(model, tokenizer, device, tta=True, tta_epochs=1):
         correct_solved = sum(
             1 for task_id in results[split] if results[split][task_id].get("solved")
         )
+
+        # Apply max_tasks limit if specified
+        if max_tasks is not None:
+            task_ids = task_ids[:max_tasks]
+
         total_tasks = len(task_ids)
         print(
             f"Processing {total_tasks} tasks in the '{split}' split. {correct_solved} already solved."
         )
+        print(f"Using {num_workers} parallel workers for task solving (when not using TTA).")
 
-        for task_id_json in tqdm(
-            task_ids, total=total_tasks, desc=f"Evaluating {split.capitalize()} Tasks"
-        ):
+        # Filter out tasks already solved
+        tasks_to_process = []
+        for task_id_json in task_ids:
             task_id = task_id_json
             task_key = task_id_json.replace(".json", "")
             if task_key in results[split]:
                 if results[split][task_key].get("solved"):
-                    print(f"Task {task_key} is already solved in results. Skipping.")
                     continue
-            print(f"Processing task {task_id} in '{split}' split.")
+            tasks_to_process.append((task_key, task_id, directory))
 
-            if tta:
+        if not tasks_to_process:
+            print(f"All tasks in '{split}' split already solved.")
+            continue
+
+        print(f"Tasks to process: {len(tasks_to_process)}")
+
+        # For TTA, fall back to sequential processing (complex model updates)
+        if tta:
+            print("TTA mode: using sequential evaluation (not parallelized)")
+            for task_key, task_id, data_path in tqdm(
+                tasks_to_process, desc=f"Evaluating {split.capitalize()} Tasks (TTA)"
+            ):
                 checkpoint_path = (
                     "small_transformer_based/results_mine/25.3M/checkpoint_epoch27_iter874.pth"
                 )
@@ -214,84 +332,128 @@ def evaluate_true(model, tokenizer, device, tta=True, tta_epochs=1):
                             tta_optimizer.step()
                         tta_scheduler.step()
                     model_to_use = model_tta
+
+                # Predict and solve for this TTA task
+                try:
+                    grid = return_task_grid(task_id)["train"]
+                except Exception as e:
+                    print(f"Error retrieving grid for task {task_id}: {e}")
+                    continue
+                prompt = generate_selector_prompt(grid)
+                prompt = extract_input_output_pairs(prompt)
+                input_ids = tokenizer.encode(prompt)
+                input_ids = torch.tensor(input_ids).unsqueeze(0).to(device)
+                attention_mask = (input_ids != tokenizer.vocab.get("<PAD>", 0)).to(device)
+                model_to_use.eval()
+                with torch.no_grad():
+                    logits = model_to_use(input_ids, attention_mask=attention_mask)
+                    second_token = torch.argmax(logits[0][2]).item()
+                    include_second = tokenizer.decode([second_token]) != "no_trans"
+                    include_third = False
+                    top3_predictions = []
+                    if not include_second and not include_third:
+                        to_consider = 5
+                        top3_predictions = extract_first_from_logits(
+                            tokenizer=tokenizer,
+                            logits=logits,
+                            index=0,
+                            number=to_consider,
+                            already_added=[],
+                        )
+                    if include_second:
+                        to_consider = 4
+                        preds_first = extract_first_from_logits(
+                            tokenizer=tokenizer, logits=logits, index=0, number=to_consider
+                        )
+                        preds_second = extract_first_from_logits(
+                            tokenizer=tokenizer,
+                            logits=logits,
+                            index=1,
+                            number=to_consider,
+                            already_added=preds_first,
+                        )
+                        top3_predictions += preds_first + preds_second
+                    if include_third:
+                        to_consider = 3
+                        preds_third = extract_first_from_logits(
+                            tokenizer=tokenizer,
+                            logits=logits,
+                            index=2,
+                            number=to_consider,
+                            already_added=top3_predictions,
+                        )
+                        top3_predictions += preds_third
+                top3_predictions = [pred for pred in top3_predictions if pred != "no_trans"]
+                top3_predictions = list(dict.fromkeys(top3_predictions))
+                proposed_transformations_dict[split][task_id] = top3_predictions
+                try:
+                    task = Task(
+                        os.path.join(data_path, task_id),
+                        proposed_transformations=top3_predictions,
+                    )
+                    solved = task.solve()
+                    if solved:
+                        print(f"Task {task_id} solved successfully with predicted transformations.")
+                        correct_solved += 1
+                    else:
+                        print(f"Task {task_id} could not be solved with predicted transformations.")
+                except Exception as e:
+                    print(f"Error solving task {task_id} with predicted transformations: {e}")
+                    solved = False
+                results[split][task_key] = {
+                    "solved": solved,
+                    "predictions": top3_predictions,
+                }
+                with open(results_file, "w") as f:
+                    json.dump({split: results[split]}, f, indent=4)
+        else:
+            # Non-TTA: Use hybrid parallel approach
+            print("\\n=== Phase 1: Batch Model Inference ===")
+            task_data_list = [(key, tid, data_path) for key, tid, data_path in tasks_to_process]
+            all_predictions = batch_predict_transformations(
+                model, tokenizer, device, task_data_list
+            )
+            print(f"Predicted transformations for {len(all_predictions)} tasks")
+
+            print("\\n=== Phase 2: Parallel Task Solving ===")
+            # Prepare task solving jobs
+            solve_jobs = [
+                (task_key, task_id, data_path, all_predictions.get(task_key, []))
+                for task_key, task_id, data_path in tasks_to_process
+            ]
+
+            # Parallel task solving with progress bar
+            if num_workers > 1:
+                with Pool(processes=num_workers) as pool:
+                    solve_results = list(
+                        tqdm(
+                            pool.imap(_solve_single_task, solve_jobs),
+                            total=len(solve_jobs),
+                            desc=f"Solving {split.capitalize()} Tasks",
+                        )
+                    )
             else:
-                model_to_use = model
-            try:
-                grid = return_task_grid(task_id)["train"]
-            except Exception as e:
-                print(f"Error retrieving grid for task {task_id}: {e}")
-                continue
-            prompt = generate_selector_prompt(grid)
-            prompt = extract_input_output_pairs(prompt)
-            input_ids = tokenizer.encode(prompt)
-            input_ids = torch.tensor(input_ids).unsqueeze(0).to(device)
-            attention_mask = (input_ids != tokenizer.vocab.get("<PAD>", 0)).to(device)
-            model_to_use.eval()
-            with torch.no_grad():
-                logits = model_to_use(input_ids, attention_mask=attention_mask)
-                # logits shape: [batch, num_cls_tokens, vocab] - indices 0,1,2 for num_cls_tokens=3
-                second_token = torch.argmax(logits[0][2]).item()
-                include_second = tokenizer.decode([second_token]) != "no_trans"
-                # We only have 3 cls tokens (indices 0,1,2), so no index 3 available
-                include_third = False
-                top3_predictions = []
-                if not include_second and not include_third:
-                    to_consider = 5
-                    top3_predictions = extract_first_from_logits(
-                        tokenizer=tokenizer,
-                        logits=logits,
-                        index=0,
-                        number=to_consider,
-                        already_added=[],
-                    )
-                if include_second:
-                    to_consider = 4
-                    preds_first = extract_first_from_logits(
-                        tokenizer=tokenizer, logits=logits, index=0, number=to_consider
-                    )
-                    preds_second = extract_first_from_logits(
-                        tokenizer=tokenizer,
-                        logits=logits,
-                        index=1,
-                        number=to_consider,
-                        already_added=preds_first,
-                    )
-                    top3_predictions += preds_first + preds_second
-                if include_third:
-                    to_consider = 3
-                    preds_third = extract_first_from_logits(
-                        tokenizer=tokenizer,
-                        logits=logits,
-                        index=2,
-                        number=to_consider,
-                        already_added=top3_predictions,
-                    )
-                    top3_predictions += preds_third
-            top3_predictions = [pred for pred in top3_predictions if pred != "no_trans"]
-            top3_predictions = list(dict.fromkeys(top3_predictions))
-            proposed_transformations_dict[split][task_id] = top3_predictions
-            data_path = dataset_splits[split]
-            try:
-                task = Task(
-                    os.path.join(data_path, task_id),
-                    proposed_transformations=top3_predictions,
-                )
-                solved = task.solve()
+                # Sequential fallback
+                solve_results = [
+                    _solve_single_task(job)
+                    for job in tqdm(solve_jobs, desc=f"Solving {split.capitalize()} Tasks")
+                ]
+
+            # Collect results
+            for task_key, solved, predictions in solve_results:
                 if solved:
-                    print(f"Task {task_id} solved successfully with predicted transformations.")
                     correct_solved += 1
-                else:
-                    print(f"Task {task_id} could not be solved with predicted transformations.")
-            except Exception as e:
-                print(f"Error solving task {task_id} with predicted transformations: {e}")
-                solved = False
-            results[split][task_key] = {
-                "solved": solved,
-                "predictions": top3_predictions,
-            }
+                results[split][task_key] = {
+                    "solved": solved,
+                    "predictions": predictions,
+                }
+                proposed_transformations_dict[split][task_key + ".json"] = predictions
+
+            # Save results
             with open(results_file, "w") as f:
                 json.dump({split: results[split]}, f, indent=4)
             print(f"Results saved to {results_file}")
+
         print(f"Number of '{split}' tasks correctly solved: {correct_solved} out of {total_tasks}")
     proposed_transformations_file = "proposed_transformations.txt"
     with open(proposed_transformations_file, "w") as f:

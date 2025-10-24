@@ -102,6 +102,10 @@ eval:
 	fi
 	uv run python -m small_transformer_based.eval $(ARGS)
 
+eval-quick:
+	@echo "Quick evaluation test (first 5 tasks, 3 workers)..."
+	$(MAKE) eval ARGS="--max-tasks 5 --num-workers 3"
+
 # Cleanup
 clean:
 	@echo "Cleaning generated data and cache files..."

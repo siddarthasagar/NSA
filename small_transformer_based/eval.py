@@ -1,3 +1,4 @@
+import argparse
 import torch
 import torch.nn as nn
 
@@ -8,46 +9,82 @@ from small_transformer_based.train import (
 )
 
 
-# Load the tokenizer and its vocabulary
-tokenizer = CustomTokenizer()
-tokenizer.load_vocab("vocab.json")  # Load the vocabulary
+def main():
+    # CLI argument parser
+    parser = argparse.ArgumentParser(description="Evaluate the transformer model on ARC tasks")
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=3,
+        help="Number of parallel workers for task solving (default: 3)",
+    )
+    parser.add_argument(
+        "--max-tasks",
+        type=int,
+        default=None,
+        help="Maximum number of tasks to evaluate per split (default: None = all tasks)",
+    )
+    parser.add_argument(
+        "--tta",
+        action="store_true",
+        default=False,
+        help="Enable test-time augmentation (default: False)",
+    )
+    args = parser.parse_args()
 
-# Initialize the model with the correct vocab_size
-model = CustomTransformer(vocab_size=len(tokenizer.vocab))
+    # Load the tokenizer and its vocabulary
+    tokenizer = CustomTokenizer()
+    tokenizer.load_vocab("vocab.json")  # Load the vocabulary
 
-# Conditional DataParallel wrapping
-if torch.cuda.device_count() >= 1:
-    print(f"Using {torch.cuda.device_count()} GPUs")
-    model = nn.DataParallel(model)
+    # Initialize the model with the correct vocab_size
+    model = CustomTransformer(vocab_size=len(tokenizer.vocab))
 
-# Device selection: CUDA > MPS (Apple Silicon) > CPU
-if torch.cuda.is_available():
-    device = torch.device("cuda")
-    print("Using CUDA GPU for evaluation")
-elif torch.backends.mps.is_available():
-    device = torch.device("mps")
-    print("Using MPS (Metal) GPU for evaluation on Apple Silicon")
-else:
-    device = torch.device("cpu")
-    print("Using CPU for evaluation")
+    # Conditional DataParallel wrapping
+    if torch.cuda.device_count() >= 1:
+        print(f"Using {torch.cuda.device_count()} GPUs")
+        model = nn.DataParallel(model)
 
-# Load the model checkpoint (adjust the path as needed)
-print("##### LOADING THE MODEL... #####")
-checkpoint = torch.load(
-    "small_transformer_based/results/25.3M/checkpoint_epoch0_iter2.pth",
-    map_location=device,
-)
+    # Device selection: CUDA > MPS (Apple Silicon) > CPU
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print("Using CUDA GPU for evaluation")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+        print("Using MPS (Metal) GPU for evaluation on Apple Silicon")
+    else:
+        device = torch.device("cpu")
+        print("Using CPU for evaluation")
 
-# Extract the model's state_dict
-state_dict = checkpoint["model_state_dict"]
+    # Load the model checkpoint (adjust the path as needed)
+    print("##### LOADING THE MODEL... #####")
+    checkpoint = torch.load(
+        "small_transformer_based/results/25.3M/checkpoint_epoch0_iter2.pth",
+        map_location=device,
+    )
 
-# # Load the state_dict into the model
-model.load_state_dict(state_dict)
-print("#####... MODEL LOADED #####")
+    # Extract the model's state_dict
+    state_dict = checkpoint["model_state_dict"]
 
-model.eval()
+    # Load the state_dict into the model
+    model.load_state_dict(state_dict)
+    print("#####... MODEL LOADED #####")
 
-model.to(device)
+    model.eval()
+    model.to(device)
+
+    # Run evaluation with command-line options
+    print(
+        f"Running evaluation with {args.num_workers} workers, TTA={args.tta}, max_tasks={args.max_tasks}"
+    )
+    evaluate_true(
+        model,
+        tokenizer,
+        device,
+        tta=args.tta,
+        num_workers=args.num_workers,
+        max_tasks=args.max_tasks,
+    )
 
 
-evaluate_true(model, tokenizer, device, tta=False)
+if __name__ == "__main__":
+    main()
