@@ -29,8 +29,11 @@ class SinusoidalPositionalEncoding(nn.Module):
         """
         batch_size, seq_len, _ = x.shape
 
+        # Use max of max_len and actual seq_len to handle longer sequences
+        actual_max_len = max(self.max_len, seq_len)
+
         # Generate position indices
-        position = jnp.arange(0, self.max_len, dtype=jnp.float32)[:, None]
+        position = jnp.arange(0, actual_max_len, dtype=jnp.float32)[:, None]
 
         # Generate div_term for sin/cos
         div_term = jnp.exp(
@@ -38,7 +41,7 @@ class SinusoidalPositionalEncoding(nn.Module):
         )
 
         # Create positional encoding matrix
-        pe = jnp.zeros((self.max_len, self.n_embd))
+        pe = jnp.zeros((actual_max_len, self.n_embd))
         pe = pe.at[:, 0::2].set(jnp.sin(position * div_term))
         pe = pe.at[:, 1::2].set(jnp.cos(position * div_term))
 

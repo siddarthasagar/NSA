@@ -52,7 +52,7 @@ dev:
 
 # Training
 train:
-	@echo "Training model with data from full_trans.json..."
+	@echo "Training model with JAX/Flax from full_trans.json..."
 	@if [ ! -f full_trans.json ]; then \
 		echo "ERROR: full_trans.json not found. Run 'make generate-data' first."; \
 		exit 1; \
@@ -64,10 +64,10 @@ train:
 	else \
 		echo "Found $$samples training samples. Proceeding..."; \
 	fi
-	uv run python -m small_transformer_based.train $(ARGS)
+	uv run python -m small_transformer_based.flax_train $(ARGS)
 
 train-quick:
-	@echo "Quick training run (5 epochs) for testing..."
+	@echo "Quick training run (5 epochs) for testing with JAX/Flax..."
 	$(MAKE) train ARGS="--data_path full_trans.json --save_iterations 10 --print_iterations 5 --epochs 5 --batch_size 4 --max_length 1024"
 
 # Data generation
@@ -94,13 +94,13 @@ generate-large:
 
 # Evaluation
 eval:
-	@echo "Evaluating trained model..."
+	@echo "Evaluating trained model with JAX/Flax..."
 	@if [ ! -d "small_transformer_based/results" ]; then \
 		echo "ERROR: No trained model found in small_transformer_based/results/"; \
 		echo "Run 'make train' first."; \
 		exit 1; \
 	fi
-	uv run python -m small_transformer_based.eval $(ARGS)
+	uv run python -m small_transformer_based.flax_eval $(ARGS)
 
 eval-quick:
 	@echo "Quick evaluation test (first 5 tasks, 3 workers)..."

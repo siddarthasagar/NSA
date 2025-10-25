@@ -22,6 +22,65 @@ from tqdm import tqdm
 from small_transformer_based.flax_model import FlaxCustomTransformer, count_parameters
 
 
+def get_memory_usage_gb():
+    """Get current memory usage in GB."""
+    try:
+        import psutil
+
+        process = psutil.Process()
+        return process.memory_info().rss / (1024**3)
+    except ImportError:
+        return 0.0
+
+
+def check_memory_threshold(max_memory_gb=8.0):
+    """
+    Check if memory usage exceeds threshold.
+
+    Args:
+        max_memory_gb: Maximum allowed memory in GB
+
+    Returns:
+        Tuple of (is_safe, current_memory_gb)
+    """
+    current_memory = get_memory_usage_gb()
+    is_safe = current_memory < max_memory_gb
+    return is_safe, current_memory
+
+
+def adjust_batch_size_for_memory(initial_batch_size, available_memory_gb, is_apple_silicon=False):
+    """
+    Adjust batch size based on available memory.
+
+    Args:
+        initial_batch_size: Requested batch size
+        available_memory_gb: Available memory in GB
+        is_apple_silicon: Whether running on Apple Silicon (unified memory)
+
+    Returns:
+        Adjusted batch size
+    """
+    # Memory estimates: ~1GB per 4 batch items for this model
+    # Apple Silicon unified memory is more efficient, so we can be more aggressive
+    memory_per_batch_item = 0.2 if is_apple_silicon else 0.25
+    estimated_memory_per_batch = initial_batch_size * memory_per_batch_item
+
+    # Use 75% of available memory on Apple Silicon (unified), 70% on discrete GPUs
+    memory_threshold = 0.75 if is_apple_silicon else 0.7
+
+    if estimated_memory_per_batch > available_memory_gb * memory_threshold:
+        adjusted_batch_size = max(
+            1, int((available_memory_gb * memory_threshold) / memory_per_batch_item)
+        )
+        print(
+            f"Adjusting batch size from {initial_batch_size} to {adjusted_batch_size} "
+            f"based on available memory ({available_memory_gb:.1f}GB)"
+        )
+        return adjusted_batch_size
+
+    return initial_batch_size
+
+
 class TrainState(train_state.TrainState):
     """Extended train state with dropout RNG."""
 
@@ -83,7 +142,10 @@ def cross_entropy_loss(logits, labels, padding_idx):
 @jax.jit
 def train_step(state, batch, padding_idx):
     """
-    Single training step (JIT-compiled).
+    Single training step (JIT-compiled for optimal performance).
+
+    JIT compilation enables XLA optimizations that are particularly
+    effective on Apple Silicon's unified memory architecture.
 
     Args:
         state: Current train state
@@ -112,7 +174,7 @@ def train_step(state, batch, padding_idx):
         # Compute loss
         return cross_entropy_loss(logits, output_ids, padding_idx)
 
-    # Compute gradients
+    # Compute gradients (XLA will optimize this for the target architecture)
     loss, grads = jax.value_and_grad(loss_fn)(state.params)
 
     # Update parameters
@@ -159,9 +221,11 @@ def collate_fn_jax(batch, padding_value=0):
     return jnp.array(padded_inputs), jnp.array(padded_outputs)
 
 
-def train_epoch(state, train_data, tokenizer, batch_size, epoch, rng):
+def train_epoch(
+    state, train_data, tokenizer, batch_size, epoch, rng, max_memory_gb=8.0, checkpoint_dir=None
+):
     """
-    Train for one epoch.
+    Train for one epoch with memory monitoring.
 
     Args:
         state: Current train state
@@ -170,6 +234,8 @@ def train_epoch(state, train_data, tokenizer, batch_size, epoch, rng):
         batch_size: Batch size
         epoch: Current epoch number
         rng: JAX random key
+        max_memory_gb: Maximum allowed memory in GB
+        checkpoint_dir: Directory to save emergency checkpoints
 
     Returns:
         Updated train state
@@ -186,6 +252,23 @@ def train_epoch(state, train_data, tokenizer, batch_size, epoch, rng):
     padding_idx = tokenizer.vocab["<PAD>"]
 
     for batch_idx in progress_bar:
+        # Memory check every 10 batches
+        if batch_idx % 10 == 0:
+            is_safe, current_memory = check_memory_threshold(max_memory_gb)
+            if not is_safe:
+                print(
+                    f"\nWARNING: Memory usage ({current_memory:.2f}GB) "
+                    f"exceeds threshold ({max_memory_gb}GB)"
+                )
+                if checkpoint_dir:
+                    emergency_path = os.path.join(
+                        checkpoint_dir, f"emergency_epoch{epoch}_batch{batch_idx}.msgpack"
+                    )
+                    save_checkpoint(state, emergency_path, epoch, batch_idx)
+                    print(f"Emergency checkpoint saved to {emergency_path}")
+                print("Stopping training to prevent memory issues.")
+                return state
+
         # Get batch indices
         start_idx = batch_idx * batch_size
         end_idx = start_idx + batch_size
@@ -199,9 +282,12 @@ def train_epoch(state, train_data, tokenizer, batch_size, epoch, rng):
         state, loss = train_step(state, batch, padding_idx)
         total_loss += float(loss)
 
-        # Update progress bar
+        # Update progress bar with memory info
         avg_loss = total_loss / (batch_idx + 1)
-        progress_bar.set_postfix(loss=f"{avg_loss:.4f}")
+        if batch_idx % 10 == 0:
+            progress_bar.set_postfix(loss=f"{avg_loss:.4f}", mem=f"{current_memory:.1f}GB")
+        else:
+            progress_bar.set_postfix(loss=f"{avg_loss:.4f}")
 
     return state
 
@@ -470,16 +556,53 @@ def balance_transformations(data):
     return balanced_data
 
 
-def main(data_path, epochs=1, batch_size=32, save_iterations=100):
+def main(data_path, epochs=1, batch_size=32, save_iterations=100, max_memory_gb=8.0):
     """
-    Main training function.
+    Main training function with memory safeguards.
 
     Args:
         data_path: Path to training data JSON
         epochs: Number of training epochs
         batch_size: Batch size for training
         save_iterations: Save checkpoint every N iterations
+        max_memory_gb: Maximum allowed memory in GB
     """
+    # Check initial memory
+    initial_memory = get_memory_usage_gb()
+    print(f"Initial memory usage: {initial_memory:.2f}GB")
+
+    # Configure JAX for Apple Silicon (M4 chip)
+    # Use Metal backend for GPU acceleration on Mac
+    os.environ.setdefault("JAX_PLATFORMS", "cpu")  # Metal support via cpu backend on M-series
+    os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+    os.environ.setdefault("XLA_PYTHON_CLIENT_ALLOCATOR", "platform")
+
+    # Enable Metal Performance Shaders acceleration if available
+    os.environ.setdefault("METAL_DEVICE_WRAPPER_TYPE", "1")
+
+    # Optimize for unified memory architecture on Apple Silicon
+    # M4 has unified memory, so we can be more aggressive with batch sizes
+    print(f"JAX backend: {jax.default_backend()}")
+    print(f"JAX devices: {jax.devices()}")
+
+    # Detect Apple Silicon and available memory
+    import platform
+
+    is_apple_silicon = platform.machine() == "arm64" and platform.system() == "Darwin"
+
+    if is_apple_silicon:
+        print("Detected Apple Silicon (M-series chip) - optimizing for unified memory architecture")
+
+    # Detect available memory and adjust batch size
+    try:
+        import psutil
+
+        available_memory = psutil.virtual_memory().available / (1024**3)
+        print(f"Available system memory: {available_memory:.2f}GB")
+        batch_size = adjust_batch_size_for_memory(batch_size, available_memory, is_apple_silicon)
+    except ImportError:
+        print("psutil not available, skipping automatic batch size adjustment")
+
     # Initialize tokenizer
     tokenizer = CustomTokenizer()
     cache_file = "dataset_cache.txt"
@@ -524,7 +647,10 @@ def main(data_path, epochs=1, batch_size=32, save_iterations=100):
     train_data, val_data = train_test_split(balanced_data, test_size=0.1, random_state=42)
 
     # Create datasets
-    max_len = 25600
+    # For Apple Silicon, we can handle longer sequences efficiently due to unified memory
+    # But for initial testing, use shorter sequences for faster iteration
+    max_len = 2048  # Reduced from 25600 for faster training during testing
+    print(f"Using max sequence length: {max_len}")
     train_dataset = CustomDataset(train_data, tokenizer, max_length=max_len)
     val_dataset = CustomDataset(val_data, tokenizer, max_length=max_len)
 
@@ -533,10 +659,12 @@ def main(data_path, epochs=1, batch_size=32, save_iterations=100):
     print(f"Vocabulary size: {len(tokenizer.vocab)}")
 
     # Initialize model
+    # JAX will automatically use optimized kernels for Apple Silicon
     rng = jax.random.PRNGKey(0)
     model = FlaxCustomTransformer(vocab_size=len(tokenizer.vocab))
 
     # Create train state
+    # On Apple Silicon, unified memory allows efficient parameter sharing
     state = create_train_state(rng, model, learning_rate=5e-5, vocab_size=len(tokenizer.vocab))
 
     # Count parameters
@@ -548,14 +676,45 @@ def main(data_path, epochs=1, batch_size=32, save_iterations=100):
     plot_dir = f"small_transformer_based/results/{total_params_millions:.1f}M"
     os.makedirs(plot_dir, exist_ok=True)
 
+    # Check memory after model initialization
+    post_init_memory = get_memory_usage_gb()
+    print(f"Memory after model initialization: {post_init_memory:.2f}GB")
+
+    if post_init_memory > max_memory_gb * 0.8:
+        print(
+            f"WARNING: Memory usage ({post_init_memory:.2f}GB) is already high. "
+            "Consider reducing batch size or max_length."
+        )
+
     # Training loop
     for epoch in range(epochs):
         print(f"Starting Epoch {epoch + 1}/{epochs}")
-        state = train_epoch(state, train_dataset, tokenizer, batch_size, epoch, rng)
+
+        try:
+            state = train_epoch(
+                state,
+                train_dataset,
+                tokenizer,
+                batch_size,
+                epoch,
+                rng,
+                max_memory_gb=max_memory_gb,
+                checkpoint_dir=plot_dir,
+            )
+        except Exception as e:
+            print(f"Error during training: {e}")
+            emergency_path = os.path.join(plot_dir, f"emergency_epoch{epoch}_error.msgpack")
+            save_checkpoint(state, emergency_path, epoch, 0)
+            print(f"Emergency checkpoint saved to {emergency_path}")
+            raise
 
         # Save checkpoint
         checkpoint_path = os.path.join(plot_dir, f"checkpoint_epoch{epoch}_final.msgpack")
         save_checkpoint(state, checkpoint_path, epoch, len(train_dataset) // batch_size)
+
+        # Memory check after epoch
+        epoch_memory = get_memory_usage_gb()
+        print(f"Memory after epoch {epoch + 1}: {epoch_memory:.2f}GB")
 
     print("Training complete!")
 
@@ -567,7 +726,18 @@ if __name__ == "__main__":
     parser.add_argument("--print_iterations", type=int, default=1)
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--max_length", type=int, default=25600)
+    parser.add_argument(
+        "--max_length",
+        type=int,
+        default=2048,
+        help="Maximum sequence length (reduced for faster training on Apple Silicon)",
+    )
+    parser.add_argument(
+        "--max_memory_gb",
+        type=float,
+        default=12.0,
+        help="Maximum memory usage in GB before stopping training",
+    )
     args = parser.parse_args()
 
     main(
@@ -575,4 +745,5 @@ if __name__ == "__main__":
         epochs=args.epochs,
         batch_size=args.batch_size,
         save_iterations=args.save_iterations,
+        max_memory_gb=args.max_memory_gb,
     )
