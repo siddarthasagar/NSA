@@ -6,6 +6,7 @@ inclusion: always
 
 - **Python:** 3.11+ (strictly `>=3.11,<3.12`)
 - **Package manager:** `uv` only (NEVER pip/conda)
+- **Python execution:** ALWAYS use `uv run python` (NEVER `python`, `python3`, or direct script execution)
 - **ML framework:** JAX/Flax/Optax (migrating from PyTorch)
 - **Core deps:** jax, jax-metal, flax, optax, networkx, numpy, einops, scikit-learn
 - **Dev tools:** pytest, pytest-cov, ruff (v0.14.2+), pyupgrade

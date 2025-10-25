@@ -21,6 +21,9 @@ inclusion: always
 ## Critical Rules
 
 - **Package manager:** ONLY `uv` - NEVER `pip` or `conda`
+- **Python execution:** ALWAYS prefix with `uv run` (e.g., `uv run python -m module`, `uv run python -c "code"`)
+  - NEVER use: `python`, `python3`, `./script.py`
+  - ALWAYS use: `uv run python`, `uv run python -m`, `uv run python -c`
 - **Commands:** ALWAYS use Makefile tasks (`make format`, `make train`, etc.)
 - **Makefile targets:** Add new target if a command will be frequently reused
 - **Testing:** Do NOT auto-run tests after each change (slows development)
