@@ -9,6 +9,7 @@ from auxilaries.grid_transformation import (
     append_transformation_to_file,
 )
 from tqdm import tqdm
+from utils import PathConfig
 
 
 def clear_and_create_folder(folder_path):
@@ -163,8 +164,8 @@ def main():
     parser.add_argument(
         "--all_transformations_path",
         type=str,
-        default="full_trans.json",
-        help="Path to the JSON file storing all transformations.",
+        default=None,
+        help="Path to the JSON file storing all transformations (default: cache/data/full_trans.json).",
     )
     parser.add_argument(
         "--transformations",
@@ -193,6 +194,13 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Ensure cache directories exist
+    PathConfig.ensure_cache_dirs()
+
+    # Use PathConfig for default all_transformations_path
+    if args.all_transformations_path is None:
+        args.all_transformations_path = PathConfig.get_data_path("full_trans.json")
 
     # Clear existing directories and create new ones based on the selected transformation
     if args.transformations in ["one", "both"]:

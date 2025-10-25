@@ -29,6 +29,7 @@ from small_transformer_based.flax_train import (
     cross_entropy_loss,
     extract_input_output_pairs,
 )
+from utils import PathConfig
 from task import Task
 
 
@@ -244,8 +245,8 @@ def evaluate_with_tta(
     )
 
     # Generate or load task-specific synthetic data
-    output_folder = f"tta/{task_id}"
-    all_transformations_path = f"tta/{task_id}.json"
+    output_folder = PathConfig.get_tta_dir(task_id)
+    all_transformations_path = PathConfig.get_tta_task_file(task_id)
 
     if os.path.exists(all_transformations_path):
         try:
@@ -446,13 +447,13 @@ def evaluate_true(state, model, tokenizer, tta=True, tta_epochs=15, num_workers=
 
         # Determine results file name
         if split == "val" and tta:
-            results_file = "arga_evaluation_tta.json"
+            results_file = PathConfig.get_data_path("arga_evaluation_tta.json")
         elif split == "train" and tta:
-            results_file = f"arga_training_tta_epoch{tta_epochs}.json"
+            results_file = PathConfig.get_data_path(f"arga_training_tta_epoch{tta_epochs}.json")
         elif split == "train" and not tta:
-            results_file = "arga_training_no_tta.json"
+            results_file = PathConfig.get_data_path("arga_training_no_tta.json")
         elif split == "val" and not tta:
-            results_file = "arga_evaluation_no_tta.json"
+            results_file = PathConfig.get_data_path("arga_evaluation_no_tta.json")
         else:
             raise ValueError("Invalid dataset split encountered.")
 
@@ -586,7 +587,7 @@ def evaluate_true(state, model, tokenizer, tta=True, tta_epochs=15, num_workers=
         print(f"Number of '{split}' tasks correctly solved: {correct_solved} out of {total_tasks}")
 
     # Save proposed transformations
-    proposed_transformations_file = "proposed_transformations.txt"
+    proposed_transformations_file = PathConfig.get_data_path("proposed_transformations.txt")
     with open(proposed_transformations_file, "w") as f:
         for split in proposed_transformations_dict:
             for task_id, transformations in proposed_transformations_dict[split].items():
@@ -627,8 +628,8 @@ def main():
     parser.add_argument(
         "--checkpoint",
         type=str,
-        default="small_transformer_based/results/25.3M/checkpoint_epoch0_final.msgpack",
-        help="Path to model checkpoint",
+        default=None,
+        help="Path to model checkpoint (default: auto-detect latest in cache/checkpoints/)",
     )
     args = parser.parse_args()
 
@@ -638,7 +639,7 @@ def main():
 
     # Load tokenizer
     tokenizer = CustomTokenizer()
-    tokenizer.load_vocab("vocab.json")
+    tokenizer.load_vocab(PathConfig.get_data_path("vocab.json"))
     print(f"Vocabulary size: {len(tokenizer.vocab)}")
 
     # Initialize model
@@ -652,6 +653,28 @@ def main():
     # Create train state
     tx = optax.chain(optax.clip_by_global_norm(1.0), optax.adamw(5e-5))
     state = TrainState.create(apply_fn=model.apply, params=params, tx=tx, dropout_rng=rng)
+
+    # Determine checkpoint path
+    if args.checkpoint is None:
+        # Auto-detect latest checkpoint
+        checkpoint_base = PathConfig.get_checkpoint_dir("25.3M")
+        if os.path.exists(checkpoint_base):
+            checkpoints = [
+                f for f in os.listdir(checkpoint_base) if f.endswith(".msgpack") and "final" in f
+            ]
+            if checkpoints:
+                # Sort by epoch number and take the latest
+                checkpoints.sort()
+                args.checkpoint = os.path.join(checkpoint_base, checkpoints[-1])
+                print(f"Auto-detected checkpoint: {args.checkpoint}")
+            else:
+                print(f"ERROR: No checkpoints found in {checkpoint_base}")
+                print("Please train a model first or specify a valid checkpoint path.")
+                return
+        else:
+            print(f"ERROR: Checkpoint directory not found at {checkpoint_base}")
+            print("Please train a model first or specify a valid checkpoint path.")
+            return
 
     # Load checkpoint
     print(f"##### LOADING THE MODEL FROM {args.checkpoint}... #####")

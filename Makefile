@@ -1,7 +1,7 @@
 # NSA: Neuro-symbolic ARC Challenge - Training Pipeline
 # ======================================================
 
-.PHONY: main add-deps dev train generate-data generate-large eval help format lint
+.PHONY: main add-deps dev train generate-data generate-large eval help format lint test test-quick coverage coverage-html
 
 # Default target - show help
 help:
@@ -21,12 +21,23 @@ help:
 	@echo "  make train         - Train model (requires generated data in full_trans.json)"
 	@echo "  make train-quick   - Quick training test (5 epochs, useful for debugging)"
 	@echo ""
+	@echo "Testing:"
+	@echo "  make test          - Run full test suite with coverage"
+	@echo "  make test-quick    - Run fast integration tests only"
+	@echo "  make coverage      - Generate coverage report (HTML + terminal)"
+	@echo "  make coverage-html - Generate and open HTML coverage report"
+	@echo ""
 	@echo "Code quality:"
 	@echo "  make format        - Run pyupgrade (py311), ruff format, and ruff fix"
 	@echo "  make lint          - Report Ruff diagnostics without fixing (fails on issues)"
 	@echo ""
 	@echo "Evaluation:"
 	@echo "  make eval          - Evaluate trained model on test set"
+	@echo "  make eval-quick    - Quick evaluation test (first 5 tasks, 3 workers)"
+	@echo ""
+	@echo "Cleanup:"
+	@echo "  make clean         - Remove cache data and test artifacts"
+	@echo "  make clean-all     - Remove everything including venv and checkpoints"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make generate-data ARGS='--samples 500 --transformations one --timeout 3.0'"
@@ -106,19 +117,48 @@ eval-quick:
 	@echo "Quick evaluation test (first 5 tasks, 3 workers)..."
 	$(MAKE) eval ARGS="--max-tasks 5 --num-workers 3"
 
+# Testing
+test:
+	@echo "Running full test suite with coverage..."
+	uv run pytest tests/ --cov=. --cov-report=html --cov-report=term
+
+test-quick:
+	@echo "Running quick integration tests..."
+	uv run pytest tests/ -v -k "minimal"
+
+coverage:
+	@echo "Generating coverage report..."
+	uv run pytest tests/ --cov=. --cov-report=html --cov-report=term-missing
+	@echo "Coverage report generated in htmlcov/"
+
+coverage-html:
+	@echo "Opening coverage report in browser..."
+	$(MAKE) coverage
+	@if command -v open >/dev/null 2>&1; then \
+		open htmlcov/index.html; \
+	elif command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open htmlcov/index.html; \
+	else \
+		echo "Please open htmlcov/index.html manually in your browser"; \
+	fi
+
 # Cleanup
 clean:
-	@echo "Cleaning generated data and cache files..."
+	@echo "Cleaning cache data and test artifacts..."
 	rm -rf final_data8/ generated_llm_data_two_trans1/
 	rm -f full_trans.json
 	rm -rf __pycache__/ */__pycache__/ */*/__pycache__/
 	rm -f vocab.json dataset_cache.txt training_data_summary.json
+	rm -rf cache/data/*.json cache/data/*.txt
+	rm -rf cache/tta/
+	rm -rf htmlcov/ .coverage .pytest_cache/
 	@echo "Cleanup complete."
 
 clean-all: clean
-	@echo "Removing virtual environment and checkpoints..."
+	@echo "Removing virtual environment, checkpoints, and entire cache..."
 	rm -rf .venv/
 	rm -rf small_transformer_based/results/
+	rm -rf cache/
 	@echo "Full cleanup complete."
 
 # Code quality and formatting

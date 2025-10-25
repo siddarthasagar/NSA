@@ -20,6 +20,7 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 from small_transformer_based.flax_model import FlaxCustomTransformer, count_parameters
+from utils import PathConfig
 
 
 def get_memory_usage_gb():
@@ -605,8 +606,12 @@ def main(data_path, epochs=1, batch_size=32, save_iterations=100, max_memory_gb=
 
     # Initialize tokenizer
     tokenizer = CustomTokenizer()
-    cache_file = "dataset_cache.txt"
-    vocab_file = "vocab.json"
+
+    # Ensure cache directories exist
+    PathConfig.ensure_cache_dirs()
+
+    cache_file = PathConfig.get_data_path("dataset_cache.txt")
+    vocab_file = PathConfig.get_data_path("vocab.json")
 
     # Check if dataset changed
     current_hash = calculate_file_hash(data_path)
@@ -672,9 +677,8 @@ def main(data_path, epochs=1, batch_size=32, save_iterations=100, max_memory_gb=
     total_params_millions = total_params / 1_000_000
     print(f"Total number of parameters: {total_params_millions:.1f}M")
 
-    # Create checkpoint directory
-    plot_dir = f"small_transformer_based/results/{total_params_millions:.1f}M"
-    os.makedirs(plot_dir, exist_ok=True)
+    # Create checkpoint directory using PathConfig
+    plot_dir = PathConfig.get_checkpoint_dir(f"{total_params_millions:.1f}M")
 
     # Check memory after model initialization
     post_init_memory = get_memory_usage_gb()
