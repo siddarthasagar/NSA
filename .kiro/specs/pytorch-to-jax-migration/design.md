@@ -382,30 +382,43 @@ from jax.experimental import enable_x64
 
 ## Migration Strategy
 
+### Phase 0: Cleanup and Preparation
+1. Remove unused LLM-related code (llm folder and references)
+2. Update dependencies in `pyproject.toml` (remove torch/einops, add jax/flax/optax)
+3. Run `make format` to ensure code quality
+4. Run `make lint` to verify no issues
+5. Verify existing tests pass with current PyTorch implementation
+
 ### Phase 1: Model Implementation
-1. Implement Flax model architecture
-2. Verify parameter count and forward pass
-3. Create checkpoint conversion utility
+1. Implement Flax model architecture in `small_transformer_based/flax_model.py`
+2. Verify parameter count matches 25.3M
+3. Create checkpoint conversion utility in `small_transformer_based/convert_checkpoint.py`
+4. Run `make format` after implementation
 
 ### Phase 2: Training Pipeline
-1. Implement training loop with Optax
-2. Test on small dataset (overfit single example)
-3. Verify loss convergence
+1. Implement training loop with Optax in `small_transformer_based/flax_train.py`
+2. Test on small dataset with `make generate-small` and `make train-quick`
+3. Verify loss convergence and checkpoint saving
+4. Run `make format` after implementation
 
 ### Phase 3: Inference Pipeline
-1. Implement batch inference
+1. Implement batch inference in `small_transformer_based/flax_eval.py`
 2. Implement TTA workflow
-3. Test on ARC tasks
+3. Test with `make eval-quick` on first 5 tasks
+4. Run `make format` after implementation
 
 ### Phase 4: Integration
-1. Update `eval.py` to use Flax model
-2. Update `train.py` to use Flax training
-3. Update dependencies in `pyproject.toml`
+1. Update `small_transformer_based/train.py` to use Flax implementation
+2. Update `small_transformer_based/eval.py` to use Flax implementation
+3. Ensure backward compatibility with existing checkpoints via conversion utility
+4. Run `make format` and `make lint`
 
 ### Phase 5: Validation
-1. Run full training on synthetic dataset
-2. Evaluate on ARC train/eval sets
-3. Compare solve rates with PyTorch baseline
+1. Generate test data: `make generate-small`
+2. Quick training test: `make train-quick`
+3. Quick evaluation test: `make eval-quick`
+4. Compare solve rates with PyTorch baseline
+5. Measure memory footprint reduction
 
 ## Performance Considerations
 

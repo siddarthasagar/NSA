@@ -725,7 +725,12 @@ def main(data_path, epochs=1, batch_size=32, save_iterations=100, max_memory_gb=
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train Flax Transformer Model")
-    parser.add_argument("--data_path", type=str, default="full_trans.json")
+    parser.add_argument(
+        "--data_path",
+        type=str,
+        default=PathConfig.get_data_path("full_trans.json"),
+        help="Path to training data JSON (default: cache/data/full_trans.json)",
+    )
     parser.add_argument("--save_iterations", type=int, default=1)
     parser.add_argument("--print_iterations", type=int, default=1)
     parser.add_argument("--batch_size", type=int, default=32)

@@ -27,6 +27,13 @@ inclusion: always
 
 ## Directory Structure
 
+**cache/** - Centralized output directory for all generated artifacts
+- `checkpoints/` - Model checkpoints organized by size (e.g., `small_transformer_based/results/3.2M/`)
+- `data/` - JSON data files (vocab.json, full_trans.json, dataset_cache.txt, evaluation results)
+- `logs/` - Training and evaluation logs
+- `tta/` - Test-time adaptation data organized by task ID
+- `generated_samples/` - Synthetic data from generate_transformation.py (one_trans/, two_trans/)
+
 **extended_transformations/** - Grid-level ops (crop, fill, connect, upscale, rotate, mirror, shift, truncate, recolor, magnet, beam, duplicate)
 
 **auxilaries/** - Data generation
@@ -37,6 +44,12 @@ inclusion: always
 - `flax_train.py`: JAX/Flax transformer training (current)
 - `train.py`: PyTorch training (deprecated)
 - `flax_eval.py`, `eval.py`: Model evaluation
+
+**tests/** - Test suite
+- `conftest.py`: Shared fixtures and test configuration
+- `test_integration_data.py`: Data generation workflow tests
+- `test_integration_train.py`: Training workflow tests
+- `test_integration_eval.py`: Evaluation workflow tests
 
 **dataset/** - ARC benchmark
 - `training/`: 400 tasks
@@ -70,6 +83,50 @@ inclusion: always
 ```
 
 **Generated artifacts:**
-- `full_trans.json`: Synthetic training data
-- `images/`: Task visualizations
-- `small_transformer_based/results/`: Model checkpoints
+- `cache/data/full_trans.json`: Synthetic training data
+- `cache/checkpoints/small_transformer_based/results/`: Model checkpoints
+- `cache/data/vocab.json`: Tokenizer vocabulary
+- `cache/logs/training_test.log`: Training logs
+- `images/`: Task visualizations (not in cache)
+
+## PathConfig Usage Patterns
+
+**Importing:**
+```python
+from utils import PathConfig
+```
+
+**Common patterns:**
+```python
+# Ensure cache directories exist (call once at module init)
+PathConfig.ensure_cache_dirs()
+
+# Get checkpoint directory for a model size
+checkpoint_dir = PathConfig.get_checkpoint_dir("3.2M")
+# Returns: "cache/checkpoints/small_transformer_based/results/3.2M"
+
+# Get checkpoint file path
+checkpoint_path = PathConfig.get_checkpoint_path("3.2M", epoch=10, final=True)
+# Returns: "cache/checkpoints/small_transformer_based/results/3.2M/checkpoint_epoch10_final.msgpack"
+
+# Get data file path
+vocab_path = PathConfig.get_data_path("vocab.json")
+# Returns: "cache/data/vocab.json"
+
+full_trans_path = PathConfig.get_data_path("full_trans.json")
+# Returns: "cache/data/full_trans.json"
+
+# Get log file path
+log_path = PathConfig.get_log_path("training_test.log")
+# Returns: "cache/logs/training_test.log"
+
+# Get TTA directory for a task
+tta_dir = PathConfig.get_tta_dir("00576224")
+# Returns: "cache/tta/00576224"
+```
+
+**When to use PathConfig:**
+- Always use for checkpoints, data files, logs, and TTA directories
+- Never hardcode paths like "small_transformer_based/results/" or "vocab.json"
+- Use PathConfig methods in training, evaluation, and data generation modules
+- PathConfig automatically creates directories as needed

@@ -152,13 +152,13 @@ def main():
     parser.add_argument(
         "--one_trans_folder",
         type=str,
-        default="final_data8",
+        default="cache/generated_samples/one_trans",
         help="Output folder for one transformation samples.",
     )
     parser.add_argument(
         "--two_trans_folder",
         type=str,
-        default="generated_llm_data_two_trans1",
+        default="cache/generated_samples/two_trans",
         help="Output folder for two transformation samples.",
     )
     parser.add_argument(

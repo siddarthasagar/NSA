@@ -18,7 +18,7 @@ help:
 	@echo "  make generate-large- Production dataset: 10k samples, both 1-step and 2-step"
 	@echo ""
 	@echo "Training:"
-	@echo "  make train         - Train model (requires generated data in full_trans.json)"
+	@echo "  make train         - Train model (requires generated data in cache/data/full_trans.json)"
 	@echo "  make train-quick   - Quick training test (5 epochs, useful for debugging)"
 	@echo ""
 	@echo "Testing:"
@@ -41,7 +41,7 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make generate-data ARGS='--samples 500 --transformations one --timeout 3.0'"
-	@echo "  make train ARGS='--data_path full_trans.json --save_iterations 50'"
+	@echo "  make train ARGS='--data_path cache/data/full_trans.json --save_iterations 50'"
 	@echo ""
 	@echo "Pipeline workflow:"
 	@echo "  1. make main                  # Setup environment"
@@ -63,12 +63,12 @@ dev:
 
 # Training
 train:
-	@echo "Training model with JAX/Flax from full_trans.json..."
-	@if [ ! -f full_trans.json ]; then \
-		echo "ERROR: full_trans.json not found. Run 'make generate-data' first."; \
+	@echo "Training model with JAX/Flax from cache/data/full_trans.json..."
+	@if [ ! -f cache/data/full_trans.json ]; then \
+		echo "ERROR: cache/data/full_trans.json not found. Run 'make generate-data' first."; \
 		exit 1; \
 	fi
-	@samples=$$(cat full_trans.json | python3 -c "import sys, json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0"); \
+	@samples=$$(cat cache/data/full_trans.json | python3 -c "import sys, json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0"); \
 	if [ "$$samples" -lt 100 ]; then \
 		echo "WARNING: Only $$samples training samples found. Recommended: 10,000+"; \
 		echo "Run 'make generate-large' to generate more data."; \
@@ -79,13 +79,13 @@ train:
 
 train-quick:
 	@echo "Quick training run (5 epochs) for testing with JAX/Flax..."
-	$(MAKE) train ARGS="--data_path full_trans.json --save_iterations 10 --print_iterations 5 --epochs 5 --batch_size 4 --max_length 1024"
+	$(MAKE) train ARGS="--data_path cache/data/full_trans.json --save_iterations 10 --print_iterations 5 --epochs 5 --batch_size 4 --max_length 1024"
 
 # Data generation
 generate-data:
 	@echo "Generating synthetic training data..."
 	uv run python -m auxilaries.generate_transformation $(ARGS)
-	@echo "Data generation complete. Check full_trans.json for samples."
+	@echo "Data generation complete. Check cache/data/full_trans.json for samples."
 
 generate-small:
 	@echo "Generating small test dataset (100 samples, 1-step transformations)..."
@@ -106,8 +106,8 @@ generate-large:
 # Evaluation
 eval:
 	@echo "Evaluating trained model with JAX/Flax..."
-	@if [ ! -d "small_transformer_based/results" ]; then \
-		echo "ERROR: No trained model found in small_transformer_based/results/"; \
+	@if [ ! -d "cache/checkpoints/small_transformer_based/results" ]; then \
+		echo "ERROR: No trained model found in cache/checkpoints/small_transformer_based/results/"; \
 		echo "Run 'make train' first."; \
 		exit 1; \
 	fi
@@ -145,10 +145,8 @@ coverage-html:
 # Cleanup
 clean:
 	@echo "Cleaning cache data and test artifacts..."
-	rm -rf final_data8/ generated_llm_data_two_trans1/
-	rm -f full_trans.json
+	rm -rf cache/generated_samples/
 	rm -rf __pycache__/ */__pycache__/ */*/__pycache__/
-	rm -f vocab.json dataset_cache.txt training_data_summary.json
 	rm -rf cache/data/*.json cache/data/*.txt
 	rm -rf cache/tta/
 	rm -rf htmlcov/ .coverage .pytest_cache/
@@ -157,7 +155,7 @@ clean:
 clean-all: clean
 	@echo "Removing virtual environment, checkpoints, and entire cache..."
 	rm -rf .venv/
-	rm -rf small_transformer_based/results/
+	rm -rf cache/checkpoints/small_transformer_based/results/
 	rm -rf cache/
 	@echo "Full cleanup complete."
 
