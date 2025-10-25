@@ -26,7 +26,7 @@ inclusion: always
 **Coverage Reports:**
 - HTML report: `htmlcov/index.html` (detailed line-by-line coverage)
 - Terminal report: Shows coverage percentages and missing lines
-- Configuration: `.coveragerc` excludes tests, migrations, and virtual environments
+- Configuration: `pyproject.toml` [tool.coverage] section excludes tests, migrations, and virtual environments
 - Target coverage: Core modules 60%+, ML modules 40%+, transformations 30%+
 
 **Interpreting Coverage:**
@@ -58,6 +58,11 @@ inclusion: always
 - **Naming:** Descriptive names, explicit over implicit
 - **Debugging:** Include debug output by default until functionality is stable
 - **Resolution:** All linting and type errors must be fixed before completion
+
+## File Organization
+
+- **Reports and observations:** All markdown reports, analysis files, and observation documents MUST be created in the `learning/` directory
+- **Configuration consolidation:** Keep all tool configurations in `pyproject.toml` (pytest, ruff, coverage, etc.) - NEVER create separate config files like `.coveragerc`, `ruff.toml`, or `pytest.ini` unless the tool has no support for pyproject.toml
 
 ## Critical Rules
 

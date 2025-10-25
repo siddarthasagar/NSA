@@ -5,16 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
-  "numpy",
-  "scikit-learn",
-  "tqdm",
-  "pillow",
-  "networkx",
-  "matplotlib",
-  "scipy",
-  "jax>=0.7.1",
-  "flax>=0.11.1,<0.12.0",
-  "optax>=0.2.5,<0.3.0",
+    "numpy",
+    "scikit-learn",
+    "tqdm",
+    "pillow",
+    "networkx",
+    "matplotlib",
+    "scipy",
+    "jax>=0.7.1",
+    "flax>=0.11.1,<0.12.0",
+    "optax>=0.2.5,<0.3.0",
 ]
 
 [dependency-groups]
@@ -31,9 +31,9 @@ target-version = "py311"
 
 [tool.ruff.lint]
 ignore = [
-  # Star imports are widely used in this repo's transformation modules
-  "F403",  # 'from module import *' used; unable to detect undefined names
-  "F405",  # Name may be undefined, or defined from star imports
+    # Star imports are widely used in this repo's transformation modules
+    "F403", # 'from module import *' used; unable to detect undefined names
+    "F405", # Name may be undefined, or defined from star imports
 ]
 
 [tool.ruff.format]
@@ -48,12 +48,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = [
-    "-v",
-    "--strict-markers",
-    "--tb=short",
-    "--cov-config=.coveragerc",
-]
+addopts = ["-v", "--strict-markers", "--tb=short", "--cov-config=.coveragerc"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
@@ -74,8 +69,6 @@ omit = [
     "*/venv/*",
     "*/.pytest_cache/*",
     "*/htmlcov/*",
-    "*/small_transformer_based/train.py",
-    "*/small_transformer_based/eval.py",
     "setup.py",
     "scripts/migrate_to_cache.py",
 ]

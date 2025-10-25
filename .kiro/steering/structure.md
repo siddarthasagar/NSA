@@ -34,6 +34,10 @@ inclusion: always
 - `tta/` - Test-time adaptation data organized by task ID
 - `generated_samples/` - Synthetic data from generate_transformation.py (one_trans/, two_trans/)
 
+**learning/** - Reports, observations, and analysis documents
+- All markdown reports and observation files go here
+- Examples: dead_code_candidates.md, performance_analysis.md, experiment_results.md
+
 **extended_transformations/** - Grid-level ops (crop, fill, connect, upscale, rotate, mirror, shift, truncate, recolor, magnet, beam, duplicate)
 
 **auxilaries/** - Data generation
